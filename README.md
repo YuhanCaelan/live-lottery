@@ -34,3 +34,7 @@
 
 - 这是静态前端项目，可直接部署到 GitHub Pages、Nginx 或任意静态托管服务
 - 如果需要默认背景图，可以在项目中补充 assets/bg.jpg
+
+## 许可
+
+本项目采用 MIT License，详见 [LICENSE](LICENSE)。
