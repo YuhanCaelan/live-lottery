@@ -1,19 +1,27 @@
 const DEFAULT_ROUNDS = 2;
 const DEFAULT_PER_ROUND = 1;
+const DEFAULT_INTRO_TEXT = '今天，你就是C位';
 const STORAGE_KEY = 'auditorium-lottery-settings-v4';
 const BACKGROUND_IMAGE = 'assets/bg.jpg';
 const BGM_SRC = '';
+const MAX_BACKGROUND_SIZE = 10 * 1024 * 1024;
+const MAX_BGM_SIZE = 30 * 1024 * 1024;
+const SMALL_SEAT_UPDATE_LIMIT = 8;
+const SEAT_BATCH_CHUNK_SIZE = 200;
+const SETTINGS_SAVE_DELAY = 220;
 
 const SEAT_ROWS = [{"excelRow":10,"level":"一层","row":1,"segments":[[5,11],[16,28],[32,38]]},{"excelRow":11,"level":"一层","row":2,"segments":[[5,11],[16,28],[32,38]]},{"excelRow":12,"level":"一层","row":3,"segments":[[5,11],[15,28],[32,38]]},{"excelRow":13,"level":"一层","row":4,"segments":[[7,11],[15,28],[32,36]]},{"excelRow":14,"level":"一层","row":5,"segments":[[7,11],[15,29],[32,36]]},{"excelRow":15,"level":"一层","row":6,"segments":[[6,11],[15,29],[32,37]]},{"excelRow":16,"level":"一层","row":7,"segments":[[6,11],[15,29],[32,37]]},{"excelRow":17,"level":"一层","row":8,"segments":[[5,11],[14,29],[32,38]]},{"excelRow":18,"level":"一层","row":9,"segments":[[4,11],[14,29],[32,39]]},{"excelRow":19,"level":"一层","row":10,"segments":[[3,11],[14,30],[32,40]]},{"excelRow":20,"level":"一层","row":11,"segments":[[2,11],[14,30],[32,40]]},{"excelRow":21,"level":"一层","row":12,"segments":[[2,11],[14,30],[32,41]]},{"excelRow":22,"level":"一层","row":13,"segments":[[1,11],[13,30],[32,42]]},{"excelRow":23,"level":"一层","row":14,"segments":[[1,11],[13,30],[32,42]]},{"excelRow":24,"level":"一层","row":15,"segments":[[1,30],[32,42]]},{"excelRow":25,"level":"一层","row":16,"segments":[[1,30],[32,42]]},{"excelRow":26,"level":"一层","row":17,"segments":[[1,30],[32,42]]},{"excelRow":27,"level":"一层","row":18,"segments":[[1,42]]},{"excelRow":31,"level":"一层","row":19,"segments":[[2,41]]},{"excelRow":32,"level":"一层","row":20,"segments":[[2,41]]},{"excelRow":33,"level":"一层","row":21,"segments":[[2,41]]},{"excelRow":34,"level":"一层","row":22,"segments":[[2,41]]},{"excelRow":35,"level":"一层","row":23,"segments":[[2,41]]},{"excelRow":36,"level":"一层","row":24,"segments":[[2,41]]},{"excelRow":37,"level":"一层","row":25,"segments":[[2,41]]},{"excelRow":38,"level":"一层","row":26,"segments":[[2,41]]},{"excelRow":39,"level":"一层","row":27,"segments":[[2,20],[23,30],[32,41]]},{"excelRow":40,"level":"一层","row":28,"segments":[[2,10],[14,20],[23,29],[33,41]]},{"excelRow":41,"level":"一层","row":29,"segments":[[14,20],[23,29]]},{"excelRow":45,"level":"二层","row":1,"segments":[[2,41]]},{"excelRow":46,"level":"二层","row":2,"segments":[[2,41]]},{"excelRow":47,"level":"二层","row":3,"segments":[[2,41]]},{"excelRow":48,"level":"二层","row":4,"segments":[[2,41]]},{"excelRow":49,"level":"二层","row":5,"segments":[[2,41]]},{"excelRow":50,"level":"二层","row":6,"segments":[[2,41]]},{"excelRow":51,"level":"二层","row":7,"segments":[[3,41]]},{"excelRow":52,"level":"二层","row":8,"segments":[[3,10],[12,29],[33,41]]}];
 
 const state = {
   candidates: [],
+  candidateMap: new Map(),
   blocked: new Set(),
   winners: [],
   settings: {
     rounds: DEFAULT_ROUNDS,
     perRound: DEFAULT_PER_ROUND,
     secondFloorEnabled: true,
+    introText: DEFAULT_INTRO_TEXT,
     backgroundDataUrl: '',
     backgroundName: '默认背景',
   },
@@ -25,6 +33,20 @@ const state = {
   seatMapRendered: false,
   seatNodes: [],
   seatNodeMap: new Map(),
+  seatRenderToken: 0,
+  winnerKeysCache: new Set(),
+  winnerKeysDirty: true,
+  settingsSaveTimer: null,
+  poolDirty: false,
+  statsDirty: false,
+  buttonsDirty: false,
+  pendingUiTimer: null,
+  enabledCountCache: 0,
+  blockedEnabledCountCache: 0,
+  winnerCountCache: 0,
+  availableCountCache: 0,
+  countsDirty: true,
+  settingsOpen: false,
   isDrawing: false,
   rollingTimer: null,
   flyingTimer: null,
@@ -60,6 +82,7 @@ const el = {
   settingsClose: document.getElementById('settingsClose'),
   roundsInput: document.getElementById('roundsInput'),
   perRoundInput: document.getElementById('perRoundInput'),
+  introTextInput: document.getElementById('introTextInput'),
   secondFloorInput: document.getElementById('secondFloorInput'),
   rangeLevelInput: document.getElementById('rangeLevelInput'),
   rangeStartRowInput: document.getElementById('rangeStartRowInput'),
@@ -69,6 +92,8 @@ const el = {
   rangeExcludeBtn: document.getElementById('rangeExcludeBtn'),
   backgroundInput: document.getElementById('backgroundInput'),
   bgmInput: document.getElementById('bgmInput'),
+  backgroundPickText: document.getElementById('backgroundPickText'),
+  bgmPickText: document.getElementById('bgmPickText'),
   backgroundName: document.getElementById('backgroundName'),
   bgmName: document.getElementById('bgmName'),
   clearMediaBtn: document.getElementById('clearMediaBtn'),
@@ -77,6 +102,7 @@ const el = {
   blockedSeatCount: document.getElementById('blockedSeatCount'),
   activeSeatCount: document.getElementById('activeSeatCount'),
   seatMap: document.getElementById('seatMap'),
+  seatBoardWrap: document.querySelector('.seat-board-wrap'),
   particleCanvas: document.getElementById('particleCanvas'),
   fireworkCanvas: document.getElementById('fireworkCanvas'),
 };
@@ -92,16 +118,19 @@ function seatLabel(seat) {
 
 function buildCandidates() {
   state.candidates = [];
+  state.candidateMap.clear();
   SEAT_ROWS.forEach((rowInfo) => {
     rowInfo.segments.forEach(([start, end]) => {
       for (let col = start; col <= end; col += 1) {
-        state.candidates.push({
+        const seat = {
           level: rowInfo.level,
           row: rowInfo.row,
           col,
           excelRow: rowInfo.excelRow,
           key: seatKey(rowInfo.level, rowInfo.row, col),
-        });
+        };
+        state.candidates.push(seat);
+        state.candidateMap.set(seat.key, seat);
       }
     });
   });
@@ -120,6 +149,9 @@ function loadSettings() {
     state.settings.rounds = clampNumber(saved.rounds, 1, 99, DEFAULT_ROUNDS);
     state.settings.perRound = clampNumber(saved.perRound, 1, 99, DEFAULT_PER_ROUND);
     state.settings.secondFloorEnabled = saved.secondFloorEnabled !== false;
+    if (typeof saved.introText === 'string' && saved.introText.trim()) {
+      state.settings.introText = saved.introText.trim().slice(0, 24);
+    }
     if (typeof saved.backgroundDataUrl === 'string') state.settings.backgroundDataUrl = saved.backgroundDataUrl;
     if (typeof saved.backgroundName === 'string' && saved.backgroundName) state.settings.backgroundName = saved.backgroundName;
     if (Array.isArray(saved.blocked)) {
@@ -136,9 +168,10 @@ function saveSettings() {
     rounds: state.settings.rounds,
     perRound: state.settings.perRound,
     secondFloorEnabled: state.settings.secondFloorEnabled,
+    introText: state.settings.introText,
+    blocked: [...state.blocked],
     backgroundDataUrl: state.settings.backgroundDataUrl,
     backgroundName: state.settings.backgroundName,
-    blocked: [...state.blocked],
   };
 
   try {
@@ -153,8 +186,32 @@ function saveSettings() {
   }
 }
 
+function scheduleSaveSettings() {
+  clearTimeout(state.settingsSaveTimer);
+  state.settingsSaveTimer = setTimeout(() => {
+    state.settingsSaveTimer = null;
+    saveSettings();
+  }, SETTINGS_SAVE_DELAY);
+}
+
+function flushScheduledSettingsSave() {
+  if (!state.settingsSaveTimer) return;
+  clearTimeout(state.settingsSaveTimer);
+  state.settingsSaveTimer = null;
+  saveSettings();
+}
+
 function getWinnerKeys() {
-  return new Set(state.winners.flat().map((winner) => winner.key));
+  if (state.winnerKeysDirty) {
+    state.winnerKeysCache = new Set(state.winners.flat().map((winner) => winner.key));
+    state.winnerKeysDirty = false;
+  }
+  return state.winnerKeysCache;
+}
+
+function markWinnerKeysDirty() {
+  state.winnerKeysDirty = true;
+  state.countsDirty = true;
 }
 
 function isSeatLevelEnabled(seat) {
@@ -194,13 +251,47 @@ function formatWinnerGroup(winners) {
   return winners.map(seatLabel).join('　');
 }
 
-function updateButtons() {
-  const available = getAvailableCandidates();
+function updateStatsTextFromCache() {
+  el.totalSeatCount.textContent = state.enabledCountCache;
+  el.blockedSeatCount.textContent = state.blockedEnabledCountCache;
+  el.activeSeatCount.textContent = state.enabledCountCache - state.blockedEnabledCountCache;
+}
+
+function recomputeSeatCounts() {
+  const winnerKeys = getWinnerKeys();
+  let enabledCount = 0;
+  let blockedEnabledCount = 0;
+  let availableCount = 0;
+
+  state.candidates.forEach((seat) => {
+    if (!isSeatLevelEnabled(seat)) return;
+    enabledCount += 1;
+    const isBlocked = state.blocked.has(seat.key);
+    if (isBlocked) blockedEnabledCount += 1;
+    if (!isBlocked && !winnerKeys.has(seat.key)) availableCount += 1;
+  });
+
+  state.enabledCountCache = enabledCount;
+  state.blockedEnabledCountCache = blockedEnabledCount;
+  state.winnerCountCache = winnerKeys.size;
+  state.availableCountCache = availableCount;
+  state.countsDirty = false;
+  state.statsDirty = false;
+  updateStatsTextFromCache();
+}
+
+function updateButtonsFast() {
+  if (state.countsDirty) recomputeSeatCounts();
   const isFinished = state.winners.length >= state.settings.rounds;
   const remainingSeatsNeeded = Math.max(0, state.settings.rounds - state.winners.length) * state.settings.perRound;
-  el.startBtn.disabled = state.isDrawing || isFinished || available.length < remainingSeatsNeeded;
+  el.startBtn.disabled = state.isDrawing || isFinished || state.availableCountCache < remainingSeatsNeeded;
   el.stopBtn.disabled = !state.isDrawing;
   el.resetBtn.disabled = state.isDrawing && state.winners.length === 0;
+  state.buttonsDirty = false;
+}
+
+function updateButtons() {
+  updateButtonsFast();
 }
 
 function updateResults(options = {}) {
@@ -231,8 +322,9 @@ function showToast(message) {
 }
 
 function startDraw() {
-  const available = getAvailableCandidates();
   if (state.isDrawing) return;
+  ensurePoolFreshBeforeDraw();
+  const available = getAvailableCandidates();
   if (state.winners.length >= state.settings.rounds) {
     showToast('抽奖已结束，请点击重置抽奖');
     return;
@@ -287,6 +379,7 @@ function stopDraw() {
   }
 
   state.winners.push(winners);
+  markWinnerKeysDirty();
   state.currentCandidate = winners[0];
   state.isDrawing = false;
   state.currentPool = [];
@@ -313,9 +406,11 @@ function resetDraw(options = {}) {
   state.rollingTimer = null;
   state.flyingTimer = null;
   state.winners = [];
+  markWinnerKeysDirty();
   state.isDrawing = false;
   state.currentCandidate = null;
   state.currentPool = [];
+  state.poolDirty = false;
   el.flyingLayer.innerHTML = '';
   el.introText.classList.remove('is-hidden');
   el.halo.classList.remove('is-drawing');
@@ -333,22 +428,89 @@ function resetDraw(options = {}) {
 function syncSettingsInputs() {
   el.roundsInput.value = state.settings.rounds;
   el.perRoundInput.value = state.settings.perRound;
+  el.introTextInput.value = state.settings.introText || DEFAULT_INTRO_TEXT;
   el.secondFloorInput.checked = state.settings.secondFloorEnabled;
   el.backgroundName.textContent = state.settings.backgroundName || '默认背景';
   el.bgmName.textContent = state.media.bgmName || '内置音乐';
+  applyIntroText();
+}
+
+function applyIntroText() {
+  el.introText.textContent = state.settings.introText || DEFAULT_INTRO_TEXT;
+}
+
+function handleIntroTextInput() {
+  const text = el.introTextInput.value.trim().slice(0, 24) || DEFAULT_INTRO_TEXT;
+  state.settings.introText = text;
+  applyIntroText();
+  scheduleSaveSettings();
 }
 
 function updateSeatStats() {
-  let enabledCount = 0;
-  let blockedEnabledCount = 0;
-  state.candidates.forEach((seat) => {
-    if (!isSeatLevelEnabled(seat)) return;
-    enabledCount += 1;
-    if (state.blocked.has(seat.key)) blockedEnabledCount += 1;
-  });
-  el.totalSeatCount.textContent = enabledCount;
-  el.blockedSeatCount.textContent = blockedEnabledCount;
-  el.activeSeatCount.textContent = enabledCount - blockedEnabledCount;
+  recomputeSeatCounts();
+}
+
+function scheduleLowPriorityUiSync() {
+  if (state.pendingUiTimer) return;
+
+  const run = () => {
+    state.pendingUiTimer = null;
+    if (state.statsDirty) {
+      if (state.countsDirty) {
+        recomputeSeatCounts();
+      } else {
+        updateStatsTextFromCache();
+        state.statsDirty = false;
+      }
+    }
+    if (state.buttonsDirty) updateButtonsFast();
+  };
+
+  if ('requestIdleCallback' in window) {
+    state.pendingUiTimer = requestIdleCallback(run, { timeout: 180 });
+  } else {
+    state.pendingUiTimer = setTimeout(run, 80);
+  }
+}
+
+function markSeatConfigDirty() {
+  state.poolDirty = true;
+  state.statsDirty = true;
+  state.buttonsDirty = true;
+}
+
+function adjustSeatCountForBlockedChange(key, isBlocked) {
+  if (state.countsDirty) return;
+  const seat = state.candidateMap.get(key);
+  if (!seat || !isSeatLevelEnabled(seat)) return;
+
+  const delta = isBlocked ? 1 : -1;
+  state.blockedEnabledCountCache += delta;
+  if (!getWinnerKeys().has(key)) {
+    state.availableCountCache -= delta;
+  }
+  updateStatsTextFromCache();
+  state.statsDirty = false;
+}
+
+function adjustSeatCountsForRange(blockedEnabledDelta, availableDelta) {
+  if (state.countsDirty) return;
+  state.blockedEnabledCountCache += blockedEnabledDelta;
+  state.availableCountCache += availableDelta;
+  updateStatsTextFromCache();
+  state.statsDirty = false;
+}
+
+function ensurePoolFreshBeforeDraw() {
+  if (!state.poolDirty) return;
+  if (state.winners.length) {
+    resetDraw({ silent: true, skipSeatRender: true });
+    renderSeatStates();
+    showToast('座位配置已变更，已重置抽奖结果');
+  }
+  state.poolDirty = false;
+  state.countsDirty = true;
+  updateButtonsFast();
 }
 
 function hasSeatInRow(rowInfo, col) {
@@ -387,12 +549,14 @@ function renderSeatMap() {
         rowNode.appendChild(gap);
       } else {
         const key = seatKey(rowInfo.level, rowInfo.row, col);
-        const seat = document.createElement('button');
+        const seat = document.createElement('div');
         seat.className = 'seat-cell';
-        seat.type = 'button';
+        seat.setAttribute('role', 'button');
+        seat.tabIndex = 0;
         seat.dataset.key = key;
         seat.dataset.level = rowInfo.level;
         seat.dataset.label = seatLabel({ level: rowInfo.level, row: rowInfo.row, col });
+        seat.setAttribute('aria-disabled', 'false');
         seat.textContent = col;
         seat.title = seat.dataset.label;
         state.seatNodes.push(seat);
@@ -431,38 +595,104 @@ function appendSeatAisle(text, parent = el.seatMap) {
 function applySeatNodeState(seat, winnerKeys = getWinnerKeys()) {
   const isBlocked = state.blocked.has(seat.dataset.key);
   const isWinner = winnerKeys.has(seat.dataset.key);
-  const isLevelDisabled = seat.dataset.level === '二层' && !state.settings.secondFloorEnabled;
+  const isDisabled = state.isDrawing || (seat.dataset.level === '二层' && !state.settings.secondFloorEnabled);
   seat.classList.toggle('is-blocked', isBlocked);
   seat.classList.toggle('is-winner', isWinner);
-  seat.classList.toggle('is-level-disabled', isLevelDisabled);
-  seat.disabled = state.isDrawing || isLevelDisabled;
+  seat.classList.toggle('is-disabled', isDisabled);
+  seat.classList.toggle('is-level-disabled', isDisabled && seat.dataset.level === '二层');
+  seat.setAttribute('aria-disabled', String(isDisabled));
+}
+
+function updateSeatNodeNow(key) {
+  const seat = state.seatNodeMap.get(key);
+  if (!seat) return;
+  applySeatNodeState(seat, getWinnerKeys());
+}
+
+function normalizeSeatKeys(keys) {
+  if (!keys) return null;
+  return Array.isArray(keys) ? keys : [...keys];
+}
+
+function batchUpdateSeatNodes(keys, options = {}) {
+  if (!state.seatMapRendered) {
+    updateSeatStats();
+    return Promise.resolve();
+  }
+
+  const token = ++state.seatRenderToken;
+  const winnerKeys = getWinnerKeys();
+  const keyList = normalizeSeatKeys(keys);
+  const seats = keyList
+    ? keyList.map((key) => state.seatNodeMap.get(key)).filter(Boolean)
+    : state.seatNodes;
+  const chunkSize = options.chunkSize || SEAT_BATCH_CHUNK_SIZE;
+  let index = 0;
+
+  return new Promise((resolve) => {
+    function finish() {
+      if (token === state.seatRenderToken) {
+        if (!keyList || state.countsDirty) {
+          recomputeSeatCounts();
+        } else if (state.statsDirty) {
+          updateStatsTextFromCache();
+          state.statsDirty = false;
+        }
+      }
+      resolve();
+    }
+
+    function processFrame() {
+      if (token !== state.seatRenderToken) {
+        resolve();
+        return;
+      }
+
+      const end = Math.min(index + chunkSize, seats.length);
+      while (index < end) {
+        applySeatNodeState(seats[index], winnerKeys);
+        index += 1;
+      }
+
+      if (index < seats.length) {
+        requestAnimationFrame(processFrame);
+      } else {
+        finish();
+      }
+    }
+
+    requestAnimationFrame(processFrame);
+  });
 }
 
 function renderSeatStates(keys = null) {
-  const winnerKeys = getWinnerKeys();
-  if (state.seatMapRendered) {
-    if (keys) {
-      keys.forEach((key) => {
-        const seat = state.seatNodeMap.get(key);
-        if (seat) applySeatNodeState(seat, winnerKeys);
-      });
-    } else {
-      state.seatNodes.forEach((seat) => applySeatNodeState(seat, winnerKeys));
-    }
+  const keyList = normalizeSeatKeys(keys);
+  if (keyList && keyList.length <= SMALL_SEAT_UPDATE_LIMIT) {
+    const winnerKeys = getWinnerKeys();
+    keyList.forEach((key) => {
+      const seat = state.seatNodeMap.get(key);
+      if (seat) applySeatNodeState(seat, winnerKeys);
+    });
+    return undefined;
   }
-  updateSeatStats();
+
+  return batchUpdateSeatNodes(keyList);
 }
 
 function toggleBlockedSeat(key) {
   if (state.isDrawing) return;
-  if (state.blocked.has(key)) {
+  const wasBlocked = state.blocked.has(key);
+  if (wasBlocked) {
     state.blocked.delete(key);
   } else {
     state.blocked.add(key);
   }
-  saveSettings();
-  resetDraw({ silent: true, skipSeatRender: true });
-  renderSeatStates([key]);
+  const isBlocked = !wasBlocked;
+  updateSeatNodeNow(key);
+  adjustSeatCountForBlockedChange(key, isBlocked);
+  markSeatConfigDirty();
+  scheduleLowPriorityUiSync();
+  scheduleSaveSettings();
 }
 
 function applySettingsFromInputs() {
@@ -476,12 +706,13 @@ function applySettingsFromInputs() {
   syncSettingsInputs();
   saveSettings();
   if (changed) {
-    resetDraw({ silent: true });
+    resetDraw({ silent: true, skipSeatRender: true });
+    renderSeatStates();
     showToast('抽奖轮次设置已更新');
   }
   updateButtons();
 }
-function applyRangeExclude() {
+async function applyRangeExclude() {
   if (state.isDrawing) return;
   const level = el.rangeLevelInput.value;
   const startRow = clampNumber(el.rangeStartRowInput.value, 1, 99, 0);
@@ -498,13 +729,20 @@ function applyRangeExclude() {
   const minCol = Math.min(startCol, endCol);
   const maxCol = Math.max(startCol, endCol);
   let count = 0;
+  let blockedEnabledDelta = 0;
+  let availableDelta = 0;
   const changedKeys = [];
+  const winnerKeys = getWinnerKeys();
 
   state.candidates.forEach((seat) => {
     if (seat.level === level && seat.row >= minRow && seat.row <= maxRow && seat.col >= minCol && seat.col <= maxCol) {
       if (!state.blocked.has(seat.key)) {
         count += 1;
         changedKeys.push(seat.key);
+        if (isSeatLevelEnabled(seat)) {
+          blockedEnabledDelta += 1;
+          if (!winnerKeys.has(seat.key)) availableDelta -= 1;
+        }
       }
       state.blocked.add(seat.key);
     }
@@ -515,9 +753,25 @@ function applyRangeExclude() {
     return;
   }
 
-  saveSettings();
-  resetDraw({ silent: true });
-  renderSeatStates();
+  const isLargeUpdate = changedKeys.length > SMALL_SEAT_UPDATE_LIMIT;
+  const originalText = el.rangeExcludeBtn.textContent;
+  if (isLargeUpdate) {
+    el.rangeExcludeBtn.disabled = true;
+    el.rangeExcludeBtn.textContent = '处理中...';
+  }
+  scheduleSaveSettings();
+  adjustSeatCountsForRange(blockedEnabledDelta, availableDelta);
+  markSeatConfigDirty();
+  scheduleLowPriorityUiSync();
+  try {
+    const renderResult = renderSeatStates(changedKeys);
+    if (renderResult) await renderResult;
+  } finally {
+    if (isLargeUpdate) {
+      el.rangeExcludeBtn.disabled = false;
+      el.rangeExcludeBtn.textContent = originalText;
+    }
+  }
   showToast(`已排除 ${count} 个座位`);
 }
 
@@ -527,17 +781,36 @@ function handleBackgroundSelect(event) {
   if (!file) return;
   if (!file.type.startsWith('image/')) {
     showToast('请选择图片文件');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > MAX_BACKGROUND_SIZE) {
+    showToast('背景图不能超过 10MB');
+    event.target.value = '';
     return;
   }
 
+  const originalText = el.backgroundPickText.textContent;
+  el.backgroundInput.disabled = true;
+  el.backgroundPickText.textContent = '处理中...';
   const reader = new FileReader();
+
   reader.onload = () => {
     state.settings.backgroundDataUrl = reader.result;
     state.settings.backgroundName = file.name;
-    el.backgroundName.textContent = file.name;
+    el.backgroundName.textContent = state.settings.backgroundName;
     applyBackground();
     saveSettings();
     showToast('背景图片已更新');
+  };
+  reader.onerror = (error) => {
+    console.error(error);
+    showToast('背景图片读取失败');
+  };
+  reader.onloadend = () => {
+    el.backgroundInput.disabled = false;
+    el.backgroundInput.value = '';
+    el.backgroundPickText.textContent = originalText;
   };
   reader.readAsDataURL(file);
 }
@@ -547,24 +820,40 @@ function handleBgmSelect(event) {
   if (!file) return;
   if (!file.type.startsWith('audio/')) {
     showToast('请选择音频文件');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > MAX_BGM_SIZE) {
+    showToast('BGM 不能超过 30MB');
+    event.target.value = '';
     return;
   }
 
-  if (state.media.bgmObjectUrl) {
-    URL.revokeObjectURL(state.media.bgmObjectUrl);
+  const originalText = el.bgmPickText.textContent;
+  el.bgmInput.disabled = true;
+  el.bgmPickText.textContent = '处理中...';
+
+  try {
+    if (state.media.bgmObjectUrl) {
+      URL.revokeObjectURL(state.media.bgmObjectUrl);
+    }
+    const objectUrl = URL.createObjectURL(file);
+    state.media.bgmUrl = objectUrl;
+    state.media.bgmObjectUrl = objectUrl;
+    state.media.bgmName = file.name;
+    el.bgmName.textContent = file.name;
+    stopSynthBgm();
+    el.bgm.src = objectUrl;
+    el.bgm.load();
+    showToast('BGM 已更新，本次打开页面内有效');
+  } catch (error) {
+    console.error(error);
+    showToast('BGM 读取失败');
+  } finally {
+    el.bgmInput.disabled = false;
+    el.bgmInput.value = '';
+    el.bgmPickText.textContent = originalText;
   }
-  const objectUrl = URL.createObjectURL(file);
-  state.media.bgmUrl = objectUrl;
-  state.media.bgmObjectUrl = objectUrl;
-  state.media.bgmName = file.name;
-  el.bgmName.textContent = file.name;
-  stopSynthBgm();
-  el.bgm.src = objectUrl;
-  el.bgm.load();
-  if (state.bgmEnabled) {
-    el.bgm.play().catch(() => {});
-  }
-  showToast('BGM 已更新');
 }
 
 function resetMediaSettings() {
@@ -578,10 +867,12 @@ function resetMediaSettings() {
   state.media.bgmName = '内置音乐';
   el.backgroundInput.value = '';
   el.bgmInput.value = '';
+  el.backgroundName.textContent = '默认背景';
+  el.bgmName.textContent = '内置音乐';
+  el.bgm.pause();
   el.bgm.removeAttribute('src');
   el.bgm.load();
   applyBackground();
-  syncSettingsInputs();
   saveSettings();
   showToast('已恢复默认媒体');
 }
@@ -591,25 +882,32 @@ function restoreDefaultMode() {
   state.settings.rounds = DEFAULT_ROUNDS;
   state.settings.perRound = DEFAULT_PER_ROUND;
   state.settings.secondFloorEnabled = true;
+  state.settings.introText = DEFAULT_INTRO_TEXT;
   state.settings.backgroundDataUrl = '';
   state.settings.backgroundName = '默认背景';
   el.backgroundInput.value = '';
   applyBackground();
   syncSettingsInputs();
   saveSettings();
-  resetDraw({ silent: true });
+  resetDraw({ silent: true, skipSeatRender: true });
   renderSeatStates();
   showToast('已恢复默认抽奖模式');
 }
 
 function openSettings() {
+  state.settingsOpen = true;
+  el.stage.classList.add('is-settings-open');
   el.settingsPanel.classList.add('is-open');
   el.settingsPanel.setAttribute('aria-hidden', 'false');
-  renderSeatMap();
-  renderSeatStates();
+  if (!state.seatMapRendered) {
+    el.seatMap.textContent = '座位图加载中...';
+    requestAnimationFrame(renderSeatMap);
+  }
 }
 
 function closeSettings() {
+  state.settingsOpen = false;
+  el.stage.classList.remove('is-settings-open');
   el.settingsPanel.classList.remove('is-open');
   el.settingsPanel.setAttribute('aria-hidden', 'true');
 }
@@ -643,12 +941,27 @@ function getBackgroundSource() {
   return state.settings.backgroundDataUrl || BACKGROUND_IMAGE;
 }
 
-function applyBackground() {
+function applyBackground(options = {}) {
   const source = getBackgroundSource();
+  if (!source) {
+    el.stage.classList.remove('has-bg');
+    return;
+  }
+
   el.stage.classList.remove('has-bg');
   el.stage.style.setProperty('--bg-image', `url("${source}")`);
   const testImage = new Image();
   testImage.onload = () => el.stage.classList.add('has-bg');
+  testImage.onerror = () => {
+    if (source !== BACKGROUND_IMAGE && !options.fallback) {
+      showToast('背景图片加载失败，已使用默认背景');
+      state.settings.backgroundDataUrl = '';
+      state.settings.backgroundName = '默认背景';
+      el.backgroundName.textContent = '默认背景';
+      saveSettings();
+      applyBackground({ fallback: true });
+    }
+  };
   testImage.src = source;
 }
 
@@ -811,6 +1124,11 @@ function setupParticleCanvas() {
   }
 
   function tick() {
+    if (state.settingsOpen) {
+      requestAnimationFrame(tick);
+      return;
+    }
+
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     particles.forEach((p) => {
       p.x += p.vx;
@@ -919,11 +1237,28 @@ function bindEvents() {
   });
   el.seatMap.addEventListener('click', (event) => {
     const seat = event.target.closest('.seat-cell');
-    if (!seat || seat.disabled) return;
+    if (!seat || state.isDrawing || seat.classList.contains('is-disabled')) return;
     toggleBlockedSeat(seat.dataset.key);
   });
+  el.seatMap.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const seat = event.target.closest('.seat-cell');
+    if (!seat || state.isDrawing || seat.classList.contains('is-disabled')) return;
+    event.preventDefault();
+    toggleBlockedSeat(seat.dataset.key);
+  });
+  if (el.seatBoardWrap) {
+    el.seatBoardWrap.addEventListener('scroll', () => {
+      el.seatMap.classList.add('is-scrolling');
+      clearTimeout(el.seatMap.scrollTimer);
+      el.seatMap.scrollTimer = setTimeout(() => {
+        el.seatMap.classList.remove('is-scrolling');
+      }, 100);
+    }, { passive: true });
+  }
   el.roundsInput.addEventListener('change', applySettingsFromInputs);
   el.perRoundInput.addEventListener('change', applySettingsFromInputs);
+  el.introTextInput.addEventListener('input', handleIntroTextInput);
   el.secondFloorInput.addEventListener('change', applySettingsFromInputs);
   el.rangeExcludeBtn.addEventListener('click', applyRangeExclude);
   el.backgroundInput.addEventListener('change', handleBackgroundSelect);
@@ -935,6 +1270,7 @@ function bindEvents() {
       closeSettings();
     }
   });
+  window.addEventListener('beforeunload', flushScheduledSettingsSave);
 }
 
 function init() {

@@ -70,6 +70,10 @@
               <label for="perRoundInput">每轮人数</label>
               <input id="perRoundInput" type="number" min="1" max="99" step="1" value="1">
             </div>
+            <div class="setting-group">
+              <label for="introTextInput">抽奖页标语</label>
+              <input id="introTextInput" type="text" maxlength="24" value="今天，你就是C位">
+            </div>
             <label class="setting-check">
               <input id="secondFloorInput" type="checkbox" checked>
               <span>启用二层座位</span>
@@ -77,14 +81,14 @@
 
             <div class="media-settings">
               <div class="quick-title">舞台媒体</div>
-              <label class="file-pick-btn">
+              <label class="file-pick-btn" id="backgroundPickBtn">
                 <input id="backgroundInput" type="file" accept="image/*">
-                <span>选择背景图片</span>
+                <span id="backgroundPickText">选择背景图片</span>
               </label>
               <div class="media-name" id="backgroundName">默认背景</div>
-              <label class="file-pick-btn">
+              <label class="file-pick-btn" id="bgmPickBtn">
                 <input id="bgmInput" type="file" accept="audio/*">
-                <span>选择 BGM</span>
+                <span id="bgmPickText">选择 BGM</span>
               </label>
               <div class="media-name" id="bgmName">内置音乐</div>
               <button class="range-apply-btn" id="clearMediaBtn" type="button">恢复默认媒体</button>
