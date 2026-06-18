@@ -6,6 +6,13 @@
   <title>晚会大屏幕随机抽奖</title>
   <link rel="stylesheet" href="style.css">
   <style>
+    .intro-text-highlight {
+      display: inline-block;
+      color: #fff4bf;
+      text-shadow: 0 0 18px rgba(255, 211, 106, 0.96), 0 0 40px rgba(255, 140, 34, 0.72);
+      transform: translateY(-0.02em) scale(1.03);
+    }
+
     .photo-mode-toggle {
       position: absolute;
       width: 1px;
@@ -214,10 +221,89 @@
   <audio id="bgm" preload="auto" loop></audio>
   <script>
     (function () {
+      const storageKey = 'auditorium-lottery-settings-v5';
+      const defaultIntroText = '今天,你就是C位';
       const stage = document.getElementById('stage');
+      const introText = document.getElementById('introText');
+      const introTextInput = document.getElementById('introTextInput');
+      const introHighlightInput = document.getElementById('introHighlightInput');
+      const introHighlightScaleInput = document.getElementById('introHighlightScaleInput');
       const toggle = document.getElementById('photoModeToggle');
       const button = document.getElementById('photoModeBtn');
-      if (!stage || !toggle || !button) return;
+      if (!stage || !toggle || !button || !introText || !introTextInput || !introHighlightInput || !introHighlightScaleInput) return;
+
+      function clampNumber(value, min, max, fallback) {
+        const parsed = Number.parseFloat(value);
+        if (!Number.isFinite(parsed)) return fallback;
+        return Math.min(max, Math.max(min, parsed));
+      }
+
+      function readSavedIntroSettings() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(storageKey));
+          if (!saved || typeof saved !== 'object') return;
+          if (typeof saved.introText === 'string' && saved.introText.trim()) {
+            introTextInput.value = saved.introText.trim().slice(0, 24);
+          }
+          if (typeof saved.introHighlightText === 'string') {
+            introHighlightInput.value = saved.introHighlightText.trim().slice(0, 12);
+          }
+          introHighlightScaleInput.value = clampNumber(saved.introHighlightScale, 1, 4, 1.8);
+        } catch (error) {
+          // Ignore storage parse failures and fall back to the current UI values.
+        }
+      }
+
+      function saveIntroSettings() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+          saved.introText = introTextInput.value.trim().slice(0, 24) || defaultIntroText;
+          saved.introHighlightText = introHighlightInput.value.trim().slice(0, 12);
+          saved.introHighlightScale = clampNumber(introHighlightScaleInput.value, 1, 4, 1.8);
+          localStorage.setItem(storageKey, JSON.stringify(saved));
+        } catch (error) {
+          // Ignore storage write failures.
+        }
+      }
+
+      function renderIntroText() {
+        const text = introTextInput.value.trim().slice(0, 24) || defaultIntroText;
+        const highlight = introHighlightInput.value.trim().slice(0, 12);
+        const scale = clampNumber(introHighlightScaleInput.value, 1, 4, 1.8);
+        introText.replaceChildren();
+        if (!highlight) {
+          introText.textContent = text;
+          return;
+        }
+
+        let cursor = 0;
+        let matched = false;
+        while (cursor < text.length) {
+          const matchIndex = text.indexOf(highlight, cursor);
+          if (matchIndex === -1) break;
+          matched = true;
+
+          if (matchIndex > cursor) {
+            introText.appendChild(document.createTextNode(text.slice(cursor, matchIndex)));
+          }
+
+          const highlighted = document.createElement('span');
+          highlighted.className = 'intro-text-highlight';
+          highlighted.style.fontSize = `${scale}em`;
+          highlighted.textContent = text.slice(matchIndex, matchIndex + highlight.length);
+          introText.appendChild(highlighted);
+          cursor = matchIndex + highlight.length;
+        }
+
+        if (!matched) {
+          introText.textContent = text;
+          return;
+        }
+
+        if (cursor < text.length) {
+          introText.appendChild(document.createTextNode(text.slice(cursor)));
+        }
+      }
 
       function enterPhotoMode() {
         toggle.checked = true;
@@ -232,6 +318,19 @@
           button.hidden = true;
         }
       });
+      [introTextInput, introHighlightInput, introHighlightScaleInput].forEach((input) => {
+        input.addEventListener('input', () => {
+          renderIntroText();
+          saveIntroSettings();
+        });
+        input.addEventListener('change', () => {
+          renderIntroText();
+          saveIntroSettings();
+        });
+      });
+
+      readSavedIntroSettings();
+      renderIntroText();
       window.__enterPhotoMode = enterPhotoMode;
     }());
   </script>
