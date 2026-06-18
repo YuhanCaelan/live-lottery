@@ -8,13 +8,14 @@
 </head>
 <body>
   <main class="stage" id="stage">
+    <input class="photo-mode-toggle" id="photoModeToggle" type="checkbox" aria-hidden="true">
     <canvas id="particleCanvas" class="canvas-layer" aria-hidden="true"></canvas>
     <canvas id="fireworkCanvas" class="canvas-layer" aria-hidden="true"></canvas>
 
     <div class="grid-overlay" aria-hidden="true"></div>
     <div class="top-actions">
       <button class="small-toggle" id="settingsToggle" type="button">设置</button>
-      <button class="small-toggle" id="photoModeBtn" type="button">合影模式</button>
+      <label class="small-toggle photo-mode-btn" id="photoModeBtn" for="photoModeToggle">合影模式</label>
       <button class="small-toggle music-toggle" id="musicToggle" type="button" aria-label="音乐开关">音乐 ON</button>
     </div>
 

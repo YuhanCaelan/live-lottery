@@ -59,6 +59,14 @@ textarea {
   pointer-events: none;
 }
 
+.photo-mode-toggle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .canvas-layer {
   width: 100%;
   height: 100%;
@@ -84,6 +92,18 @@ textarea {
 .stage.is-photo-mode .round-badge,
 .stage.is-photo-mode .show-results-btn,
 .stage.is-photo-mode .settings-panel {
+  display: none !important;
+}
+
+.photo-mode-toggle:checked ~ .top-actions,
+.photo-mode-toggle:checked ~ .controls,
+.photo-mode-toggle:checked ~ .round-badge,
+.photo-mode-toggle:checked ~ .show-results-btn,
+.photo-mode-toggle:checked ~ .settings-panel {
+  display: none !important;
+}
+
+.photo-mode-toggle:checked ~ .hero .round-badge {
   display: none !important;
 }
 

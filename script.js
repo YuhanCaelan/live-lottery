@@ -84,6 +84,7 @@ const el = {
   musicToggle: document.getElementById('musicToggle'),
   settingsToggle: document.getElementById('settingsToggle'),
   photoModeBtn: document.getElementById('photoModeBtn'),
+  photoModeToggle: document.getElementById('photoModeToggle'),
   settingsPanel: document.getElementById('settingsPanel'),
   settingsClose: document.getElementById('settingsClose'),
   roundsInput: document.getElementById('roundsInput'),
@@ -991,6 +992,9 @@ function applyPhotoMode(enabled) {
     closeSettings();
   }
   el.stage.classList.toggle('is-photo-mode', state.photoMode);
+  if (el.photoModeToggle) {
+    el.photoModeToggle.checked = state.photoMode;
+  }
   if (el.photoModeBtn) {
     el.photoModeBtn.hidden = state.photoMode;
   }
@@ -1320,7 +1324,9 @@ function bindEvents() {
   el.resetBtn.addEventListener('click', () => resetDraw());
   el.showResultsBtn.addEventListener('click', showAllResults);
   el.settingsToggle.addEventListener('click', openSettings);
-  el.photoModeBtn.addEventListener('click', () => applyPhotoMode(true));
+  if (el.photoModeToggle) {
+    el.photoModeToggle.addEventListener('change', () => applyPhotoMode(el.photoModeToggle.checked));
+  }
   el.settingsClose.addEventListener('click', closeSettings);
   el.settingsPanel.addEventListener('click', (event) => {
     if (event.target === el.settingsPanel) closeSettings();
