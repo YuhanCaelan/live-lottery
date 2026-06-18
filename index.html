@@ -5,49 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>晚会大屏幕随机抽奖</title>
   <link rel="stylesheet" href="style.css">
-  <style>
-    .intro-text-highlight {
-      display: inline-block;
-      color: #fff4bf;
-      text-shadow: 0 0 18px rgba(255, 211, 106, 0.96), 0 0 40px rgba(255, 140, 34, 0.72);
-      transform: translateY(-0.02em) scale(1.03);
-    }
-
-    .photo-mode-toggle {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .photo-mode-toggle:checked ~ .top-actions,
-    .photo-mode-toggle:checked ~ .controls,
-    .photo-mode-toggle:checked ~ .round-badge,
-    .photo-mode-toggle:checked ~ .show-results-btn,
-    .photo-mode-toggle:checked ~ .settings-panel {
-      display: none !important;
-    }
-
-    .stage.is-photo-mode .top-actions,
-    .stage.is-photo-mode .controls,
-    .stage.is-photo-mode .round-badge,
-    .stage.is-photo-mode .show-results-btn,
-    .stage.is-photo-mode .settings-panel {
-      display: none !important;
-    }
-  </style>
 </head>
 <body>
   <main class="stage" id="stage">
-    <input class="photo-mode-toggle" id="photoModeToggle" type="checkbox" aria-hidden="true">
     <canvas id="particleCanvas" class="canvas-layer" aria-hidden="true"></canvas>
     <canvas id="fireworkCanvas" class="canvas-layer" aria-hidden="true"></canvas>
 
     <div class="grid-overlay" aria-hidden="true"></div>
     <div class="top-actions">
       <button class="small-toggle" id="settingsToggle" type="button">设置</button>
-      <button class="small-toggle" id="photoModeBtn" type="button">合影模式</button>
       <button class="small-toggle music-toggle" id="musicToggle" type="button" aria-label="音乐开关">音乐 ON</button>
     </div>
 
@@ -58,8 +24,8 @@
         <div class="halo-ring halo-ring-a"></div>
         <div class="halo-ring halo-ring-b"></div>
         <div class="halo-core">
-          <div class="intro-text" id="introText">今天，你就是C位</div>
-          <div class="rolling-number" id="rollingNumber">15排：20</div>
+          <div class="intro-text" id="introText">今天, 你就是C位</div>
+          <div class="rolling-number" id="rollingNumber">15排, 20座</div>
         </div>
       </div>
 
@@ -89,7 +55,11 @@
         <header class="settings-header">
           <div>
             <div class="settings-kicker">抽奖设置</div>
-            <h1>不参与座位与抽奖轮次</h1>
+            <h1 id="settingsPageTitle">不参与座位与抽奖轮次</h1>
+          </div>
+          <div class="settings-tabs" role="tablist" aria-label="设置页面切换">
+            <button class="settings-tab is-active" id="settingsPageTabBtn" type="button" role="tab" aria-selected="true">抽奖页</button>
+            <button class="settings-tab" id="photoPageTabBtn" type="button" role="tab" aria-selected="false">合影模式</button>
           </div>
           <button class="icon-close" id="settingsClose" type="button" aria-label="关闭设置">×</button>
         </header>
@@ -106,15 +76,11 @@
             </div>
             <div class="setting-group">
               <label for="introTextInput">抽奖页标语</label>
-              <input id="introTextInput" type="text" maxlength="24" value="今天，你就是C位">
+              <input id="introTextInput" type="text" maxlength="24" value="今天, 你就是C位">
             </div>
             <div class="setting-group">
-              <label for="introHighlightInput">突出文字</label>
-              <input id="introHighlightInput" type="text" maxlength="12" placeholder="如 C位">
-            </div>
-            <div class="setting-group">
-              <label for="introHighlightScaleInput">突出倍数</label>
-              <input id="introHighlightScaleInput" type="number" min="1" max="4" step="0.1" value="1.8">
+              <label for="introHighlightInput">标语放大字</label>
+              <input id="introHighlightInput" type="text" maxlength="16" value="C位" placeholder="如 C位">
             </div>
             <label class="setting-check">
               <input id="secondFloorInput" type="checkbox" checked>
@@ -177,125 +143,6 @@
   </main>
 
   <audio id="bgm" preload="auto" loop></audio>
-  <script>
-    (function () {
-      const storageKey = 'auditorium-lottery-settings-v4';
-      const defaultIntroText = '今天，你就是C位';
-      const stage = document.getElementById('stage');
-      const introText = document.getElementById('introText');
-      const introTextInput = document.getElementById('introTextInput');
-      const introHighlightInput = document.getElementById('introHighlightInput');
-      const introHighlightScaleInput = document.getElementById('introHighlightScaleInput');
-      const photoModeTimeoutInput = document.createElement('input');
-      const toggle = document.getElementById('photoModeToggle');
-      const button = document.getElementById('photoModeBtn');
-      if (!stage || !toggle || !button || !introText || !introTextInput || !introHighlightInput || !introHighlightScaleInput) return;
-
-      let isRenderingIntroText = false;
-      let introTextObserver = null;
-      let photoModeTimer = null;
-
-      function clampNumber(value, min, max, fallback) {
-        const parsed = Number.parseFloat(value);
-        if (!Number.isFinite(parsed)) return fallback;
-        return Math.min(max, Math.max(min, parsed));
-      }
-
-      function clearPhotoModeTimer() {
-        if (!photoModeTimer) return;
-        clearTimeout(photoModeTimer);
-        photoModeTimer = null;
-      }
-
-      function exitPhotoMode() {
-        clearPhotoModeTimer();
-        toggle.checked = false;
-        stage.classList.remove('is-photo-mode');
-        button.hidden = false;
-      }
-
-      function schedulePhotoModeAutoExit() {
-        clearPhotoModeTimer();
-        photoModeTimer = setTimeout(exitPhotoMode, 10 * 60 * 1000);
-      }
-
-      function renderIntroText() {
-        if (isRenderingIntroText) return;
-        isRenderingIntroText = true;
-        const text = introTextInput.value.trim().slice(0, 24) || defaultIntroText;
-        const highlight = introHighlightInput.value.trim().slice(0, 12);
-        const scale = clampNumber(introHighlightScaleInput.value, 1, 4, 1.8);
-        introText.replaceChildren();
-        if (!highlight) {
-          introText.textContent = text;
-          isRenderingIntroText = false;
-          return;
-        }
-
-        let cursor = 0;
-        let matched = false;
-        while (cursor < text.length) {
-          const matchIndex = text.indexOf(highlight, cursor);
-          if (matchIndex === -1) break;
-          matched = true;
-          if (matchIndex > cursor) {
-            introText.appendChild(document.createTextNode(text.slice(cursor, matchIndex)));
-          }
-          const highlighted = document.createElement('span');
-          highlighted.className = 'intro-text-highlight';
-          highlighted.style.fontSize = `${scale}em`;
-          highlighted.textContent = text.slice(matchIndex, matchIndex + highlight.length);
-          introText.appendChild(highlighted);
-          cursor = matchIndex + highlight.length;
-        }
-
-        if (!matched) {
-          introText.textContent = text;
-          isRenderingIntroText = false;
-          return;
-        }
-
-        if (cursor < text.length) {
-          introText.appendChild(document.createTextNode(text.slice(cursor)));
-        }
-        isRenderingIntroText = false;
-      }
-
-      function startIntroTextObserver() {
-        if (introTextObserver) return;
-        introTextObserver = new MutationObserver(() => {
-          renderIntroText();
-        });
-        introTextObserver.observe(introText, { childList: true, characterData: true, subtree: true });
-      }
-
-      function enterPhotoMode() {
-        toggle.checked = true;
-        stage.classList.add('is-photo-mode');
-        button.hidden = true;
-        schedulePhotoModeAutoExit();
-      }
-
-      button.addEventListener('click', enterPhotoMode);
-      toggle.addEventListener('change', () => {
-        if (toggle.checked) {
-          stage.classList.add('is-photo-mode');
-          button.hidden = true;
-          schedulePhotoModeAutoExit();
-        } else {
-          exitPhotoMode();
-        }
-      });
-      [introTextInput, introHighlightInput, introHighlightScaleInput].forEach((input) => {
-        input.addEventListener('input', renderIntroText);
-        input.addEventListener('change', renderIntroText);
-      });
-
-      renderIntroText();
-      startIntroTextObserver();
-      window.addEventListener('beforeunload', clearPhotoModeTimer);
-    }());
-  </script>
   <script src="script.js"></script>
 </body>
 </html>

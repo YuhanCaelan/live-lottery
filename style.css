@@ -79,6 +79,20 @@ textarea {
   display: none;
 }
 
+.stage.is-photo-mode .top-actions,
+.stage.is-photo-mode .round-badge,
+.stage.is-photo-mode .winner-panel,
+.stage.is-photo-mode .result-list,
+.stage.is-photo-mode .show-results-btn,
+.stage.is-photo-mode .controls {
+  display: none;
+}
+
+.stage.is-photo-mode .hero {
+  height: 100%;
+  padding-top: 0;
+}
+
 .hero {
   position: relative;
   z-index: 3;
@@ -177,6 +191,11 @@ textarea {
   line-height: 1.18;
   text-shadow: 0 0 18px rgba(255, 255, 255, 0.88), 0 0 44px rgba(100, 234, 255, 0.88);
   transition: opacity 0.55s ease, transform 0.55s ease;
+}
+
+.intro-highlight {
+  font-size: 1.35em;
+  line-height: 0.92;
 }
 
 .intro-text.is-hidden {
@@ -556,6 +575,30 @@ button:disabled {
   gap: 24px;
   padding: 18px 24px;
   border-bottom: 1px solid rgba(100, 234, 255, 0.18);
+}
+
+.settings-tabs {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.settings-tab {
+  min-width: 96px;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid rgba(100, 234, 255, 0.24);
+  border-radius: 999px;
+  color: #dffbff;
+  font-size: 15px;
+  font-weight: 800;
+  background: rgba(6, 23, 55, 0.58);
+  cursor: pointer;
+}
+
+.settings-tab.is-active {
+  color: #04172f;
+  background: linear-gradient(180deg, #bafcff, #35d0ff);
 }
 
 .settings-kicker {

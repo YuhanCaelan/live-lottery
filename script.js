@@ -1,8 +1,9 @@
 const DEFAULT_ROUNDS = 2;
 const DEFAULT_PER_ROUND = 1;
-const DEFAULT_INTRO_TEXT = '今天，你就是C位';
-const STORAGE_KEY = 'auditorium-lottery-settings-v4';
-const BACKGROUND_IMAGE = '';
+const DEFAULT_INTRO_TEXT = '今天, 你就是C位';
+const DEFAULT_INTRO_HIGHLIGHT = 'C位';
+const STORAGE_KEY = 'auditorium-lottery-settings-v5';
+const BACKGROUND_IMAGE = 'assets/bg.jpg';
 const BGM_SRC = '';
 const MAX_BACKGROUND_SIZE = 10 * 1024 * 1024;
 const MAX_BGM_SIZE = 30 * 1024 * 1024;
@@ -22,8 +23,7 @@ const state = {
     perRound: DEFAULT_PER_ROUND,
     secondFloorEnabled: true,
     introText: DEFAULT_INTRO_TEXT,
-    introHighlightText: '',
-    introHighlightScale: 1.8,
+    introHighlight: DEFAULT_INTRO_HIGHLIGHT,
     backgroundDataUrl: '',
     backgroundName: '默认背景',
   },
@@ -86,8 +86,10 @@ const el = {
   perRoundInput: document.getElementById('perRoundInput'),
   introTextInput: document.getElementById('introTextInput'),
   introHighlightInput: document.getElementById('introHighlightInput'),
-  introHighlightScaleInput: document.getElementById('introHighlightScaleInput'),
   secondFloorInput: document.getElementById('secondFloorInput'),
+  settingsPageTitle: document.getElementById('settingsPageTitle'),
+  settingsPageTabBtn: document.getElementById('settingsPageTabBtn'),
+  photoPageTabBtn: document.getElementById('photoPageTabBtn'),
   rangeLevelInput: document.getElementById('rangeLevelInput'),
   rangeStartRowInput: document.getElementById('rangeStartRowInput'),
   rangeStartColInput: document.getElementById('rangeStartColInput'),
@@ -117,7 +119,7 @@ function seatKey(level, row, col) {
 
 function seatLabel(seat) {
   const prefix = seat.level === '二层' ? '二层 ' : '';
-  return `${prefix}${seat.row}排:${seat.col}座`;
+  return `${prefix}${seat.row}排, ${seat.col}座`;
 }
 
 function buildCandidates() {
@@ -146,12 +148,6 @@ function clampNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, number));
 }
 
-function clampFloat(value, min, max, fallback) {
-  const number = Number.parseFloat(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.min(max, Math.max(min, number));
-}
-
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -162,10 +158,9 @@ function loadSettings() {
     if (typeof saved.introText === 'string' && saved.introText.trim()) {
       state.settings.introText = saved.introText.trim().slice(0, 24);
     }
-    if (typeof saved.introHighlightText === 'string') {
-      state.settings.introHighlightText = saved.introHighlightText.trim().slice(0, 12);
+    if (typeof saved.introHighlight === 'string' && saved.introHighlight.trim()) {
+      state.settings.introHighlight = saved.introHighlight.trim().slice(0, 16);
     }
-    state.settings.introHighlightScale = clampFloat(saved.introHighlightScale, 1, 4, 1.8);
     if (typeof saved.backgroundDataUrl === 'string') state.settings.backgroundDataUrl = saved.backgroundDataUrl;
     if (typeof saved.backgroundName === 'string' && saved.backgroundName) state.settings.backgroundName = saved.backgroundName;
     if (Array.isArray(saved.blocked)) {
@@ -183,8 +178,7 @@ function saveSettings() {
     perRound: state.settings.perRound,
     secondFloorEnabled: state.settings.secondFloorEnabled,
     introText: state.settings.introText,
-    introHighlightText: state.settings.introHighlightText,
-    introHighlightScale: state.settings.introHighlightScale,
+    introHighlight: state.settings.introHighlight,
     blocked: [...state.blocked],
     backgroundDataUrl: state.settings.backgroundDataUrl,
     backgroundName: state.settings.backgroundName,
@@ -198,7 +192,7 @@ function saveSettings() {
     payload.backgroundDataUrl = '';
     payload.backgroundName = '默认背景';
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    showToast('背景图片较大，已仅在当前页面生效');
+    showToast('背景图片较大, 已仅在当前页面生效');
   }
 }
 
@@ -315,7 +309,7 @@ function updateResults(options = {}) {
   state.winners.forEach((winners, index) => {
     const item = document.createElement('div');
     item.className = 'result-item';
-    item.textContent = `${roundText(index)}：${formatWinnerGroup(winners)}`;
+    item.textContent = `${roundText(index)}: ${formatWinnerGroup(winners)}`;
     el.resultItems.appendChild(item);
   });
   const title = el.resultList.querySelector('.result-title');
@@ -342,12 +336,12 @@ function startDraw() {
   ensurePoolFreshBeforeDraw();
   const available = getAvailableCandidates();
   if (state.winners.length >= state.settings.rounds) {
-    showToast('抽奖已结束，请点击重置抽奖');
+    showToast('抽奖已结束, 请点击重置抽奖');
     return;
   }
   const remainingSeatsNeeded = (state.settings.rounds - state.winners.length) * state.settings.perRound;
   if (available.length < remainingSeatsNeeded) {
-    showToast('候选座位不足，请调整不参与座位或抽奖人数');
+    showToast('候选座位不足, 请调整不参与座位或抽奖人数');
     return;
   }
 
@@ -389,7 +383,7 @@ function stopDraw() {
   const winners = pickWinners(available, state.settings.perRound);
   if (winners.length < state.settings.perRound) {
     state.isDrawing = false;
-    showToast('候选座位不足，无法完成本轮抽奖');
+    showToast('候选座位不足, 无法完成本轮抽奖');
     updateButtons();
     return;
   }
@@ -413,7 +407,7 @@ function stopDraw() {
   updateResults();
   updateButtons();
   launchFireworks();
-  showToast(`${roundText(state.winners.length - 1)}中奖：${formatWinnerGroup(winners)}`);
+  showToast(`${roundText(state.winners.length - 1)}中奖: ${formatWinnerGroup(winners)}`);
 }
 
 function resetDraw(options = {}) {
@@ -445,8 +439,7 @@ function syncSettingsInputs() {
   el.roundsInput.value = state.settings.rounds;
   el.perRoundInput.value = state.settings.perRound;
   el.introTextInput.value = state.settings.introText || DEFAULT_INTRO_TEXT;
-  if (el.introHighlightInput) el.introHighlightInput.value = state.settings.introHighlightText || '';
-  if (el.introHighlightScaleInput) el.introHighlightScaleInput.value = state.settings.introHighlightScale;
+  el.introHighlightInput.value = state.settings.introHighlight || DEFAULT_INTRO_HIGHLIGHT;
   el.secondFloorInput.checked = state.settings.secondFloorEnabled;
   el.backgroundName.textContent = state.settings.backgroundName || '默认背景';
   el.bgmName.textContent = state.media.bgmName || '内置音乐';
@@ -455,41 +448,25 @@ function syncSettingsInputs() {
 
 function applyIntroText() {
   const text = state.settings.introText || DEFAULT_INTRO_TEXT;
-  const highlightText = state.settings.introHighlightText || '';
-  const scale = state.settings.introHighlightScale || 1.8;
-  el.introText.replaceChildren();
-  if (!highlightText) {
+  const highlight = (state.settings.introHighlight || DEFAULT_INTRO_HIGHLIGHT).trim();
+  el.introText.textContent = '';
+  if (!highlight) {
     el.introText.textContent = text;
     return;
   }
-
-  let cursor = 0;
-  let matched = false;
-  while (cursor < text.length) {
-    const matchIndex = text.indexOf(highlightText, cursor);
-    if (matchIndex === -1) break;
-    matched = true;
-
-    if (matchIndex > cursor) {
-      el.introText.appendChild(document.createTextNode(text.slice(cursor, matchIndex)));
-    }
-
-    const highlighted = document.createElement('span');
-    highlighted.className = 'intro-text-highlight';
-    highlighted.style.fontSize = `${scale}em`;
-    highlighted.textContent = text.slice(matchIndex, matchIndex + highlightText.length);
-    el.introText.appendChild(highlighted);
-    cursor = matchIndex + highlightText.length;
-  }
-
-  if (!matched) {
+  const start = text.indexOf(highlight);
+  if (start < 0) {
     el.introText.textContent = text;
     return;
   }
-
-  if (cursor < text.length) {
-    el.introText.appendChild(document.createTextNode(text.slice(cursor)));
-  }
+  const before = text.slice(0, start);
+  const after = text.slice(start + highlight.length);
+  if (before) el.introText.appendChild(document.createTextNode(before));
+  const mark = document.createElement('span');
+  mark.className = 'intro-highlight';
+  mark.textContent = highlight;
+  el.introText.appendChild(mark);
+  if (after) el.introText.appendChild(document.createTextNode(after));
 }
 
 function handleIntroTextInput() {
@@ -500,14 +477,8 @@ function handleIntroTextInput() {
 }
 
 function handleIntroHighlightInput() {
-  state.settings.introHighlightText = el.introHighlightInput.value.trim().slice(0, 12);
-  applyIntroText();
-  scheduleSaveSettings();
-}
-
-function handleIntroHighlightScaleInput() {
-  state.settings.introHighlightScale = clampFloat(el.introHighlightScaleInput.value, 1, 4, 1.8);
-  el.introHighlightScaleInput.value = state.settings.introHighlightScale;
+  const highlight = el.introHighlightInput.value.trim().slice(0, 16) || DEFAULT_INTRO_HIGHLIGHT;
+  state.settings.introHighlight = highlight;
   applyIntroText();
   scheduleSaveSettings();
 }
@@ -572,7 +543,7 @@ function ensurePoolFreshBeforeDraw() {
   if (state.winners.length) {
     resetDraw({ silent: true, skipSeatRender: true });
     renderSeatStates();
-    showToast('座位配置已变更，已重置抽奖结果');
+    showToast('座位配置已变更, 已重置抽奖结果');
   }
   state.poolDirty = false;
   state.countsDirty = true;
@@ -911,7 +882,7 @@ function handleBgmSelect(event) {
     stopSynthBgm();
     el.bgm.src = objectUrl;
     el.bgm.load();
-    showToast('BGM 已更新，本次打开页面内有效');
+    showToast('BGM 已更新, 本次打开页面内有效');
   } catch (error) {
     console.error(error);
     showToast('BGM 读取失败');
@@ -949,6 +920,7 @@ function restoreDefaultMode() {
   state.settings.perRound = DEFAULT_PER_ROUND;
   state.settings.secondFloorEnabled = true;
   state.settings.introText = DEFAULT_INTRO_TEXT;
+  state.settings.introHighlight = DEFAULT_INTRO_HIGHLIGHT;
   state.settings.backgroundDataUrl = '';
   state.settings.backgroundName = '默认背景';
   el.backgroundInput.value = '';
@@ -958,6 +930,16 @@ function restoreDefaultMode() {
   resetDraw({ silent: true, skipSeatRender: true });
   renderSeatStates();
   showToast('已恢复默认抽奖模式');
+}
+
+function setSettingsPage(page) {
+  const isPhoto = page === 'photo';
+  el.settingsPageTabBtn.classList.toggle('is-active', !isPhoto);
+  el.photoPageTabBtn.classList.toggle('is-active', isPhoto);
+  el.settingsPageTabBtn.setAttribute('aria-selected', String(!isPhoto));
+  el.photoPageTabBtn.setAttribute('aria-selected', String(isPhoto));
+  el.stage.classList.toggle('is-photo-mode', isPhoto);
+  el.settingsPageTitle.textContent = isPhoto ? '合影模式' : '不参与座位与抽奖轮次';
 }
 
 function openSettings() {
@@ -1020,7 +1002,7 @@ function applyBackground(options = {}) {
   testImage.onload = () => el.stage.classList.add('has-bg');
   testImage.onerror = () => {
     if (source !== BACKGROUND_IMAGE && !options.fallback) {
-      showToast('背景图片加载失败，已使用默认背景');
+      showToast('背景图片加载失败, 已使用默认背景');
       state.settings.backgroundDataUrl = '';
       state.settings.backgroundName = '默认背景';
       el.backgroundName.textContent = '默认背景';
@@ -1325,9 +1307,10 @@ function bindEvents() {
   el.roundsInput.addEventListener('change', applySettingsFromInputs);
   el.perRoundInput.addEventListener('change', applySettingsFromInputs);
   el.introTextInput.addEventListener('input', handleIntroTextInput);
-  if (el.introHighlightInput) el.introHighlightInput.addEventListener('input', handleIntroHighlightInput);
-  if (el.introHighlightScaleInput) el.introHighlightScaleInput.addEventListener('input', handleIntroHighlightScaleInput);
+  el.introHighlightInput.addEventListener('input', handleIntroHighlightInput);
   el.secondFloorInput.addEventListener('change', applySettingsFromInputs);
+  el.settingsPageTabBtn.addEventListener('click', () => setSettingsPage('draw'));
+  el.photoPageTabBtn.addEventListener('click', () => setSettingsPage('photo'));
   el.rangeExcludeBtn.addEventListener('click', applyRangeExclude);
   el.backgroundInput.addEventListener('change', handleBackgroundSelect);
   el.bgmInput.addEventListener('change', handleBgmSelect);
@@ -1345,6 +1328,7 @@ function init() {
   buildCandidates();
   loadSettings();
   syncSettingsInputs();
+  setSettingsPage('draw');
   setupBackground();
   setupAudio();
   setupParticleCanvas();
