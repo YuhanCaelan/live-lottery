@@ -232,6 +232,9 @@
       const button = document.getElementById('photoModeBtn');
       if (!stage || !toggle || !button || !introText || !introTextInput || !introHighlightInput || !introHighlightScaleInput) return;
 
+      let isRenderingIntroText = false;
+      let introTextObserver = null;
+
       function clampNumber(value, min, max, fallback) {
         const parsed = Number.parseFloat(value);
         if (!Number.isFinite(parsed)) return fallback;
@@ -267,12 +270,15 @@
       }
 
       function renderIntroText() {
+        if (isRenderingIntroText) return;
+        isRenderingIntroText = true;
         const text = introTextInput.value.trim().slice(0, 24) || defaultIntroText;
         const highlight = introHighlightInput.value.trim().slice(0, 12);
         const scale = clampNumber(introHighlightScaleInput.value, 1, 4, 1.8);
         introText.replaceChildren();
         if (!highlight) {
           introText.textContent = text;
+          isRenderingIntroText = false;
           return;
         }
 
@@ -297,12 +303,27 @@
 
         if (!matched) {
           introText.textContent = text;
+          isRenderingIntroText = false;
           return;
         }
 
         if (cursor < text.length) {
           introText.appendChild(document.createTextNode(text.slice(cursor)));
         }
+        isRenderingIntroText = false;
+      }
+
+      function ensureIntroHighlight() {
+        if (isRenderingIntroText) return;
+        renderIntroText();
+      }
+
+      function startIntroTextObserver() {
+        if (introTextObserver) return;
+        introTextObserver = new MutationObserver(() => {
+          ensureIntroHighlight();
+        });
+        introTextObserver.observe(introText, { childList: true, characterData: true, subtree: true });
       }
 
       function enterPhotoMode() {
@@ -331,6 +352,8 @@
 
       readSavedIntroSettings();
       renderIntroText();
+      startIntroTextObserver();
+      window.addEventListener('load', ensureIntroHighlight, { once: true });
       window.__enterPhotoMode = enterPhotoMode;
     }());
   </script>
