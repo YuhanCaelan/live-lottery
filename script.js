@@ -83,6 +83,7 @@ const el = {
   bgm: document.getElementById('bgm'),
   musicToggle: document.getElementById('musicToggle'),
   settingsToggle: document.getElementById('settingsToggle'),
+  photoModeBtn: document.getElementById('photoModeBtn'),
   settingsPanel: document.getElementById('settingsPanel'),
   settingsClose: document.getElementById('settingsClose'),
   roundsInput: document.getElementById('roundsInput'),
@@ -990,6 +991,9 @@ function applyPhotoMode(enabled) {
     closeSettings();
   }
   el.stage.classList.toggle('is-photo-mode', state.photoMode);
+  if (el.photoModeBtn) {
+    el.photoModeBtn.hidden = state.photoMode;
+  }
   showToast(state.photoMode ? '合影模式已开启' : '合影模式已关闭');
 }
 
@@ -1316,6 +1320,7 @@ function bindEvents() {
   el.resetBtn.addEventListener('click', () => resetDraw());
   el.showResultsBtn.addEventListener('click', showAllResults);
   el.settingsToggle.addEventListener('click', openSettings);
+  el.photoModeBtn.addEventListener('click', () => applyPhotoMode(true));
   el.settingsClose.addEventListener('click', closeSettings);
   el.settingsPanel.addEventListener('click', (event) => {
     if (event.target === el.settingsPanel) closeSettings();
