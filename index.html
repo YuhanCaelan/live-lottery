@@ -158,6 +158,10 @@
               <label for="introHighlightScaleInput">突出倍数</label>
               <input id="introHighlightScaleInput" type="number" min="1" max="4" step="0.1" value="1.8">
             </div>
+            <div class="setting-group">
+              <label for="photoModeTimeoutInput">合影模式自动退出(分钟)</label>
+              <input id="photoModeTimeoutInput" type="number" min="1" max="180" step="1" value="10">
+            </div>
             <label class="setting-check">
               <input id="secondFloorInput" type="checkbox" checked>
               <span>启用二层座位</span>
@@ -228,17 +232,23 @@
       const introTextInput = document.getElementById('introTextInput');
       const introHighlightInput = document.getElementById('introHighlightInput');
       const introHighlightScaleInput = document.getElementById('introHighlightScaleInput');
+      const photoModeTimeoutInput = document.getElementById('photoModeTimeoutInput');
       const toggle = document.getElementById('photoModeToggle');
       const button = document.getElementById('photoModeBtn');
-      if (!stage || !toggle || !button || !introText || !introTextInput || !introHighlightInput || !introHighlightScaleInput) return;
+      if (!stage || !toggle || !button || !introText || !introTextInput || !introHighlightInput || !introHighlightScaleInput || !photoModeTimeoutInput) return;
 
       let isRenderingIntroText = false;
       let introTextObserver = null;
+      let photoModeTimer = null;
 
       function clampNumber(value, min, max, fallback) {
         const parsed = Number.parseFloat(value);
         if (!Number.isFinite(parsed)) return fallback;
         return Math.min(max, Math.max(min, parsed));
+      }
+
+      function normalizePhotoTimeoutMinutes(value) {
+        return clampNumber(value, 1, 180, 10);
       }
 
       function readSavedIntroSettings() {
@@ -252,6 +262,7 @@
             introHighlightInput.value = saved.introHighlightText.trim().slice(0, 12);
           }
           introHighlightScaleInput.value = clampNumber(saved.introHighlightScale, 1, 4, 1.8);
+          photoModeTimeoutInput.value = normalizePhotoTimeoutMinutes(saved.photoModeTimeoutMinutes);
         } catch (error) {
           // Ignore storage parse failures and fall back to the current UI values.
         }
@@ -263,10 +274,31 @@
           saved.introText = introTextInput.value.trim().slice(0, 24) || defaultIntroText;
           saved.introHighlightText = introHighlightInput.value.trim().slice(0, 12);
           saved.introHighlightScale = clampNumber(introHighlightScaleInput.value, 1, 4, 1.8);
+          saved.photoModeTimeoutMinutes = normalizePhotoTimeoutMinutes(photoModeTimeoutInput.value);
           localStorage.setItem(storageKey, JSON.stringify(saved));
         } catch (error) {
           // Ignore storage write failures.
         }
+      }
+
+      function clearPhotoModeTimer() {
+        if (!photoModeTimer) return;
+        clearTimeout(photoModeTimer);
+        photoModeTimer = null;
+      }
+
+      function exitPhotoMode() {
+        clearPhotoModeTimer();
+        toggle.checked = false;
+        stage.classList.remove('is-photo-mode');
+        button.hidden = false;
+      }
+
+      function schedulePhotoModeAutoExit() {
+        clearPhotoModeTimer();
+        const timeoutMinutes = normalizePhotoTimeoutMinutes(photoModeTimeoutInput.value);
+        if (timeoutMinutes <= 0) return;
+        photoModeTimer = setTimeout(exitPhotoMode, timeoutMinutes * 60 * 1000);
       }
 
       function renderIntroText() {
@@ -330,23 +362,29 @@
         toggle.checked = true;
         stage.classList.add('is-photo-mode');
         button.hidden = true;
+        schedulePhotoModeAutoExit();
       }
 
-      button.addEventListener('click', enterPhotoMode, { once: true });
+      button.addEventListener('click', enterPhotoMode);
       toggle.addEventListener('change', () => {
         if (toggle.checked) {
           stage.classList.add('is-photo-mode');
           button.hidden = true;
+          schedulePhotoModeAutoExit();
+        } else {
+          exitPhotoMode();
         }
       });
-      [introTextInput, introHighlightInput, introHighlightScaleInput].forEach((input) => {
+      [introTextInput, introHighlightInput, introHighlightScaleInput, photoModeTimeoutInput].forEach((input) => {
         input.addEventListener('input', () => {
           renderIntroText();
           saveIntroSettings();
+          if (toggle.checked) schedulePhotoModeAutoExit();
         });
         input.addEventListener('change', () => {
           renderIntroText();
           saveIntroSettings();
+          if (toggle.checked) schedulePhotoModeAutoExit();
         });
       });
 
@@ -354,7 +392,9 @@
       renderIntroText();
       startIntroTextObserver();
       window.addEventListener('load', ensureIntroHighlight, { once: true });
+      window.addEventListener('beforeunload', clearPhotoModeTimer);
       window.__enterPhotoMode = enterPhotoMode;
+      window.__exitPhotoMode = exitPhotoMode;
     }());
   </script>
   <script src="script.js"></script>
