@@ -5,6 +5,73 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>晚会大屏幕随机抽奖</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    .photo-mode-toggle {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .photo-mode-toggle:checked ~ .top-actions,
+    .photo-mode-toggle:checked ~ .controls,
+    .photo-mode-toggle:checked ~ .round-badge,
+    .photo-mode-toggle:checked ~ .show-results-btn,
+    .photo-mode-toggle:checked ~ .settings-panel {
+      display: none !important;
+    }
+
+    .photo-mode-toggle:checked ~ .hero .round-badge {
+      display: none !important;
+    }
+
+    .stage {
+      background:
+        radial-gradient(circle at 50% 44%, rgba(100, 234, 255, 0.18), transparent 28%),
+        radial-gradient(circle at 16% 18%, rgba(255, 211, 106, 0.12), transparent 22%),
+        radial-gradient(circle at 84% 18%, rgba(255, 140, 34, 0.1), transparent 20%),
+        linear-gradient(145deg, #041025 0%, #081d45 46%, #030814 100%);
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      z-index: 12;
+    }
+
+    .small-toggle {
+      min-width: 92px;
+      min-height: 40px;
+      padding: 0 18px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 999px;
+      color: #ecfbff;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      background: rgba(6, 17, 40, 0.55);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    }
+
+    .photo-mode-btn {
+      color: #08213f;
+      background: linear-gradient(180deg, #fff1b8, #ffc14d 62%, #f08b17);
+      border-color: rgba(255, 211, 106, 0.42);
+      box-shadow: 0 0 24px rgba(255, 180, 58, 0.38);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .stage.is-photo-mode .top-actions,
+    .stage.is-photo-mode .controls,
+    .stage.is-photo-mode .round-badge,
+    .stage.is-photo-mode .show-results-btn,
+    .stage.is-photo-mode .settings-panel {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
   <main class="stage" id="stage">
@@ -15,7 +82,7 @@
     <div class="grid-overlay" aria-hidden="true"></div>
     <div class="top-actions">
       <button class="small-toggle" id="settingsToggle" type="button">设置</button>
-      <label class="small-toggle photo-mode-btn" id="photoModeBtn" for="photoModeToggle">合影模式</label>
+      <button class="small-toggle photo-mode-btn" id="photoModeBtn" type="button">合影模式</button>
       <button class="small-toggle music-toggle" id="musicToggle" type="button" aria-label="音乐开关">音乐 ON</button>
     </div>
 
@@ -145,6 +212,29 @@
   </main>
 
   <audio id="bgm" preload="auto" loop></audio>
+  <script>
+    (function () {
+      const stage = document.getElementById('stage');
+      const toggle = document.getElementById('photoModeToggle');
+      const button = document.getElementById('photoModeBtn');
+      if (!stage || !toggle || !button) return;
+
+      function enterPhotoMode() {
+        toggle.checked = true;
+        stage.classList.add('is-photo-mode');
+        button.hidden = true;
+      }
+
+      button.addEventListener('click', enterPhotoMode, { once: true });
+      toggle.addEventListener('change', () => {
+        if (toggle.checked) {
+          stage.classList.add('is-photo-mode');
+          button.hidden = true;
+        }
+      });
+      window.__enterPhotoMode = enterPhotoMode;
+    }());
+  </script>
   <script src="script.js"></script>
 </body>
 </html>
