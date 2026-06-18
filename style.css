@@ -59,14 +59,6 @@ textarea {
   pointer-events: none;
 }
 
-.photo-mode-toggle {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
 .canvas-layer {
   width: 100%;
   height: 100%;
@@ -85,26 +77,6 @@ textarea {
 .stage.is-settings-open #fireworkCanvas,
 .stage.is-settings-open .grid-overlay {
   display: none;
-}
-
-.stage.is-photo-mode .top-actions,
-.stage.is-photo-mode .controls,
-.stage.is-photo-mode .round-badge,
-.stage.is-photo-mode .show-results-btn,
-.stage.is-photo-mode .settings-panel {
-  display: none !important;
-}
-
-.photo-mode-toggle:checked ~ .top-actions,
-.photo-mode-toggle:checked ~ .controls,
-.photo-mode-toggle:checked ~ .round-badge,
-.photo-mode-toggle:checked ~ .show-results-btn,
-.photo-mode-toggle:checked ~ .settings-panel {
-  display: none !important;
-}
-
-.photo-mode-toggle:checked ~ .hero .round-badge {
-  display: none !important;
 }
 
 .hero {
@@ -205,13 +177,6 @@ textarea {
   line-height: 1.18;
   text-shadow: 0 0 18px rgba(255, 255, 255, 0.88), 0 0 44px rgba(100, 234, 255, 0.88);
   transition: opacity 0.55s ease, transform 0.55s ease;
-}
-
-.intro-text-highlight {
-  display: inline-block;
-  color: #fff1a6;
-  text-shadow: 0 0 16px rgba(255, 211, 106, 0.95), 0 0 32px rgba(255, 140, 34, 0.65);
-  transform: translateY(-0.02em);
 }
 
 .intro-text.is-hidden {
