@@ -31,6 +31,7 @@ const state = {
     bgmUrl: '',
     bgmObjectUrl: '',
     bgmName: '内置音乐',
+    bgmDataUrl: '',
   },
   seatMapRendered: false,
   seatNodes: [],
@@ -173,6 +174,8 @@ function loadSettings() {
     state.settings.introHighlightScale = clampFloat(saved.introHighlightScale, 1, 4, 1.8);
     if (typeof saved.backgroundDataUrl === 'string') state.settings.backgroundDataUrl = saved.backgroundDataUrl;
     if (typeof saved.backgroundName === 'string' && saved.backgroundName) state.settings.backgroundName = saved.backgroundName;
+    if (typeof saved.bgmDataUrl === 'string') state.media.bgmDataUrl = saved.bgmDataUrl;
+    if (typeof saved.bgmName === 'string' && saved.bgmName) state.media.bgmName = saved.bgmName;
     if (Array.isArray(saved.blocked)) {
       const validKeys = new Set(state.candidates.map((seat) => seat.key));
       state.blocked = new Set(saved.blocked.filter((key) => validKeys.has(key)));
@@ -193,6 +196,8 @@ function saveSettings() {
     blocked: [...state.blocked],
     backgroundDataUrl: state.settings.backgroundDataUrl,
     backgroundName: state.settings.backgroundName,
+    bgmDataUrl: state.media.bgmDataUrl,
+    bgmName: state.media.bgmName,
   };
 
   try {
@@ -202,7 +207,11 @@ function saveSettings() {
     state.settings.backgroundName = '默认背景';
     payload.backgroundDataUrl = '';
     payload.backgroundName = '默认背景';
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (innerError) {
+      // Ignore repeated storage failures.
+    }
     showToast('背景图片较大,已仅在当前页面生效');
   }
 }
@@ -912,6 +921,16 @@ function handleBgmSelect(event) {
     state.media.bgmUrl = objectUrl;
     state.media.bgmObjectUrl = objectUrl;
     state.media.bgmName = file.name;
+    const reader = new FileReader();
+    reader.onload = () => {
+      state.media.bgmDataUrl = reader.result;
+      saveSettings();
+    };
+    reader.onerror = (error) => {
+      console.error(error);
+      showToast('BGM 读取失败');
+    };
+    reader.readAsDataURL(file);
     el.bgmName.textContent = file.name;
     stopSynthBgm();
     el.bgm.src = objectUrl;
@@ -936,6 +955,7 @@ function resetMediaSettings() {
   state.media.bgmUrl = '';
   state.media.bgmObjectUrl = '';
   state.media.bgmName = '内置音乐';
+  state.media.bgmDataUrl = '';
   el.backgroundInput.value = '';
   el.bgmInput.value = '';
   el.backgroundName.textContent = '默认背景';
@@ -1063,7 +1083,7 @@ function setupBackground() {
 }
 
 function getBgmSource() {
-  return state.media.bgmUrl || BGM_SRC;
+  return state.media.bgmUrl || state.media.bgmDataUrl || BGM_SRC;
 }
 
 function setupAudio() {
