@@ -1,7 +1,7 @@
 const DEFAULT_ROUNDS = 2;
 const DEFAULT_PER_ROUND = 1;
-const DEFAULT_INTRO_TEXT = '今天，你就是C位';
-const STORAGE_KEY = 'auditorium-lottery-settings-v4';
+const DEFAULT_INTRO_TEXT = '今天,你就是C位';
+const STORAGE_KEY = 'auditorium-lottery-settings-v5';
 const BACKGROUND_IMAGE = 'assets/bg.jpg';
 const BGM_SRC = '';
 const MAX_BACKGROUND_SIZE = 10 * 1024 * 1024;
@@ -22,6 +22,8 @@ const state = {
     perRound: DEFAULT_PER_ROUND,
     secondFloorEnabled: true,
     introText: DEFAULT_INTRO_TEXT,
+    introHighlightText: '',
+    introHighlightScale: 1.8,
     backgroundDataUrl: '',
     backgroundName: '默认背景',
   },
@@ -47,6 +49,9 @@ const state = {
   availableCountCache: 0,
   countsDirty: true,
   settingsOpen: false,
+  photoMode: false,
+  photoShortcutCount: 0,
+  photoShortcutTimer: 0,
   isDrawing: false,
   rollingTimer: null,
   flyingTimer: null,
@@ -83,6 +88,8 @@ const el = {
   roundsInput: document.getElementById('roundsInput'),
   perRoundInput: document.getElementById('perRoundInput'),
   introTextInput: document.getElementById('introTextInput'),
+  introHighlightInput: document.getElementById('introHighlightInput'),
+  introHighlightScaleInput: document.getElementById('introHighlightScaleInput'),
   secondFloorInput: document.getElementById('secondFloorInput'),
   rangeLevelInput: document.getElementById('rangeLevelInput'),
   rangeStartRowInput: document.getElementById('rangeStartRowInput'),
@@ -113,7 +120,7 @@ function seatKey(level, row, col) {
 
 function seatLabel(seat) {
   const prefix = seat.level === '二层' ? '二层 ' : '';
-  return `${prefix}${seat.row}排：${seat.col}列`;
+  return `${prefix}${seat.row}排:${seat.col}座`;
 }
 
 function buildCandidates() {
@@ -142,6 +149,12 @@ function clampNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, number));
 }
 
+function clampFloat(value, min, max, fallback) {
+  const number = Number.parseFloat(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -152,6 +165,10 @@ function loadSettings() {
     if (typeof saved.introText === 'string' && saved.introText.trim()) {
       state.settings.introText = saved.introText.trim().slice(0, 24);
     }
+    if (typeof saved.introHighlightText === 'string') {
+      state.settings.introHighlightText = saved.introHighlightText.trim().slice(0, 12);
+    }
+    state.settings.introHighlightScale = clampFloat(saved.introHighlightScale, 1, 4, 1.8);
     if (typeof saved.backgroundDataUrl === 'string') state.settings.backgroundDataUrl = saved.backgroundDataUrl;
     if (typeof saved.backgroundName === 'string' && saved.backgroundName) state.settings.backgroundName = saved.backgroundName;
     if (Array.isArray(saved.blocked)) {
@@ -169,6 +186,8 @@ function saveSettings() {
     perRound: state.settings.perRound,
     secondFloorEnabled: state.settings.secondFloorEnabled,
     introText: state.settings.introText,
+    introHighlightText: state.settings.introHighlightText,
+    introHighlightScale: state.settings.introHighlightScale,
     blocked: [...state.blocked],
     backgroundDataUrl: state.settings.backgroundDataUrl,
     backgroundName: state.settings.backgroundName,
@@ -182,7 +201,7 @@ function saveSettings() {
     payload.backgroundDataUrl = '';
     payload.backgroundName = '默认背景';
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    showToast('背景图片较大，已仅在当前页面生效');
+    showToast('背景图片较大,已仅在当前页面生效');
   }
 }
 
@@ -299,7 +318,7 @@ function updateResults(options = {}) {
   state.winners.forEach((winners, index) => {
     const item = document.createElement('div');
     item.className = 'result-item';
-    item.textContent = `${roundText(index)}：${formatWinnerGroup(winners)}`;
+      item.textContent = `${roundText(index)}:${formatWinnerGroup(winners)}`;
     el.resultItems.appendChild(item);
   });
   const title = el.resultList.querySelector('.result-title');
@@ -318,7 +337,7 @@ function showToast(message) {
   el.toast.textContent = message;
   el.toast.classList.add('is-visible');
   clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => el.toast.classList.remove('is-visible'), 2400);
+    showToast.timer = setTimeout(() => el.toast.classList.remove('is-visible'), 2400);
 }
 
 function startDraw() {
@@ -326,12 +345,12 @@ function startDraw() {
   ensurePoolFreshBeforeDraw();
   const available = getAvailableCandidates();
   if (state.winners.length >= state.settings.rounds) {
-    showToast('抽奖已结束，请点击重置抽奖');
+     showToast('抽奖已结束,请点击重置抽奖');
     return;
   }
   const remainingSeatsNeeded = (state.settings.rounds - state.winners.length) * state.settings.perRound;
   if (available.length < remainingSeatsNeeded) {
-    showToast('候选座位不足，请调整不参与座位或抽奖人数');
+    showToast('候选座位不足,请调整不参与座位或抽奖人数');
     return;
   }
 
@@ -373,7 +392,7 @@ function stopDraw() {
   const winners = pickWinners(available, state.settings.perRound);
   if (winners.length < state.settings.perRound) {
     state.isDrawing = false;
-    showToast('候选座位不足，无法完成本轮抽奖');
+      showToast('候选座位不足,无法完成本轮抽奖');
     updateButtons();
     return;
   }
@@ -397,7 +416,7 @@ function stopDraw() {
   updateResults();
   updateButtons();
   launchFireworks();
-  showToast(`${roundText(state.winners.length - 1)}中奖：${formatWinnerGroup(winners)}`);
+    showToast(`${roundText(state.winners.length - 1)}中奖:${formatWinnerGroup(winners)}`);
 }
 
 function resetDraw(options = {}) {
@@ -422,13 +441,15 @@ function resetDraw(options = {}) {
   el.rollingNumber.textContent = seatLabel(state.candidates[state.candidates.length - 1]);
   updateResults({ skipSeatRender: options.skipSeatRender });
   updateButtons();
-  if (!options.silent) showToast(options.message || '抽奖已重置');
+    if (!options.silent) showToast(options.message || '抽奖已重置');
 }
 
 function syncSettingsInputs() {
   el.roundsInput.value = state.settings.rounds;
   el.perRoundInput.value = state.settings.perRound;
   el.introTextInput.value = state.settings.introText || DEFAULT_INTRO_TEXT;
+  el.introHighlightInput.value = state.settings.introHighlightText || '';
+  el.introHighlightScaleInput.value = state.settings.introHighlightScale;
   el.secondFloorInput.checked = state.settings.secondFloorEnabled;
   el.backgroundName.textContent = state.settings.backgroundName || '默认背景';
   el.bgmName.textContent = state.media.bgmName || '内置音乐';
@@ -436,12 +457,60 @@ function syncSettingsInputs() {
 }
 
 function applyIntroText() {
-  el.introText.textContent = state.settings.introText || DEFAULT_INTRO_TEXT;
+  const text = state.settings.introText || DEFAULT_INTRO_TEXT;
+  const highlightText = state.settings.introHighlightText || '';
+  const scale = state.settings.introHighlightScale;
+  el.introText.replaceChildren();
+  if (!highlightText) {
+    el.introText.textContent = text;
+    return;
+  }
+
+  let cursor = 0;
+  let matched = false;
+  while (cursor < text.length) {
+    const matchIndex = text.indexOf(highlightText, cursor);
+    if (matchIndex === -1) break;
+    matched = true;
+
+    if (matchIndex > cursor) {
+      el.introText.appendChild(document.createTextNode(text.slice(cursor, matchIndex)));
+    }
+
+    const highlighted = document.createElement('span');
+    highlighted.className = 'intro-text-highlight';
+    highlighted.style.fontSize = `${scale}em`;
+    highlighted.textContent = text.slice(matchIndex, matchIndex + highlightText.length);
+    el.introText.appendChild(highlighted);
+    cursor = matchIndex + highlightText.length;
+  }
+
+  if (!matched) {
+    el.introText.textContent = text;
+    return;
+  }
+
+  if (cursor < text.length) {
+    el.introText.appendChild(document.createTextNode(text.slice(cursor)));
+  }
 }
 
 function handleIntroTextInput() {
   const text = el.introTextInput.value.trim().slice(0, 24) || DEFAULT_INTRO_TEXT;
   state.settings.introText = text;
+  applyIntroText();
+  scheduleSaveSettings();
+}
+
+function handleIntroHighlightInput() {
+  state.settings.introHighlightText = el.introHighlightInput.value.trim().slice(0, 12);
+  applyIntroText();
+  scheduleSaveSettings();
+}
+
+function handleIntroHighlightScaleInput() {
+  state.settings.introHighlightScale = clampFloat(el.introHighlightScaleInput.value, 1, 4, 1.8);
+  el.introHighlightScaleInput.value = state.settings.introHighlightScale;
   applyIntroText();
   scheduleSaveSettings();
 }
@@ -506,7 +575,7 @@ function ensurePoolFreshBeforeDraw() {
   if (state.winners.length) {
     resetDraw({ silent: true, skipSeatRender: true });
     renderSeatStates();
-    showToast('座位配置已变更，已重置抽奖结果');
+    showToast('座位配置已变更,已重置抽奖结果');
   }
   state.poolDirty = false;
   state.countsDirty = true;
@@ -845,7 +914,7 @@ function handleBgmSelect(event) {
     stopSynthBgm();
     el.bgm.src = objectUrl;
     el.bgm.load();
-    showToast('BGM 已更新，本次打开页面内有效');
+    showToast('BGM 已更新,本次打开页面内有效');
   } catch (error) {
     console.error(error);
     showToast('BGM 读取失败');
@@ -883,6 +952,8 @@ function restoreDefaultMode() {
   state.settings.perRound = DEFAULT_PER_ROUND;
   state.settings.secondFloorEnabled = true;
   state.settings.introText = DEFAULT_INTRO_TEXT;
+  state.settings.introHighlightText = '';
+  state.settings.introHighlightScale = 1.8;
   state.settings.backgroundDataUrl = '';
   state.settings.backgroundName = '默认背景';
   el.backgroundInput.value = '';
@@ -895,6 +966,7 @@ function restoreDefaultMode() {
 }
 
 function openSettings() {
+  if (state.photoMode) return;
   state.settingsOpen = true;
   el.stage.classList.add('is-settings-open');
   el.settingsPanel.classList.add('is-open');
@@ -910,6 +982,19 @@ function closeSettings() {
   el.stage.classList.remove('is-settings-open');
   el.settingsPanel.classList.remove('is-open');
   el.settingsPanel.setAttribute('aria-hidden', 'true');
+}
+
+function applyPhotoMode(enabled) {
+  state.photoMode = enabled;
+  if (state.photoMode && state.settingsOpen) {
+    closeSettings();
+  }
+  el.stage.classList.toggle('is-photo-mode', state.photoMode);
+  showToast(state.photoMode ? '合影模式已开启' : '合影模式已关闭');
+}
+
+function togglePhotoMode() {
+  applyPhotoMode(!state.photoMode);
 }
 
 function spawnFlyingNumber(seat) {
@@ -954,7 +1039,7 @@ function applyBackground(options = {}) {
   testImage.onload = () => el.stage.classList.add('has-bg');
   testImage.onerror = () => {
     if (source !== BACKGROUND_IMAGE && !options.fallback) {
-      showToast('背景图片加载失败，已使用默认背景');
+      showToast('背景图片加载失败,已使用默认背景');
       state.settings.backgroundDataUrl = '';
       state.settings.backgroundName = '默认背景';
       el.backgroundName.textContent = '默认背景';
@@ -1259,6 +1344,8 @@ function bindEvents() {
   el.roundsInput.addEventListener('change', applySettingsFromInputs);
   el.perRoundInput.addEventListener('change', applySettingsFromInputs);
   el.introTextInput.addEventListener('input', handleIntroTextInput);
+  el.introHighlightInput.addEventListener('input', handleIntroHighlightInput);
+  el.introHighlightScaleInput.addEventListener('change', handleIntroHighlightScaleInput);
   el.secondFloorInput.addEventListener('change', applySettingsFromInputs);
   el.rangeExcludeBtn.addEventListener('click', applyRangeExclude);
   el.backgroundInput.addEventListener('change', handleBackgroundSelect);
@@ -1268,6 +1355,25 @@ function bindEvents() {
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && el.settingsPanel.classList.contains('is-open')) {
       closeSettings();
+      return;
+    }
+
+    const activeTag = document.activeElement && document.activeElement.tagName;
+    if (activeTag && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag)) return;
+    if (document.activeElement && document.activeElement.isContentEditable) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    if (event.key.toLowerCase() === 'p') {
+      const now = Date.now();
+      if (now - state.photoShortcutTimer > 1200) {
+        state.photoShortcutCount = 0;
+      }
+      state.photoShortcutTimer = now;
+      state.photoShortcutCount += 1;
+      if (state.photoShortcutCount >= 3) {
+        state.photoShortcutCount = 0;
+        togglePhotoMode();
+      }
     }
   });
   window.addEventListener('beforeunload', flushScheduledSettingsSave);
