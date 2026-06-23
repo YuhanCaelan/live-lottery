@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>合影模式</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="photo-page">
+  <main class="stage photo-stage" id="photoStage">
+    <canvas id="photoParticleCanvas" class="canvas-layer" aria-hidden="true"></canvas>
+    <div class="grid-overlay" aria-hidden="true"></div>
+
+    <section class="hero photo-hero" aria-live="polite">
+      <div class="halo" id="photoHalo">
+        <div class="halo-ring halo-ring-a"></div>
+        <div class="halo-ring halo-ring-b"></div>
+        <div class="halo-core">
+          <div class="intro-text" id="photoIntroText">今天, 你就是C位</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'auditorium-lottery-settings-v5';
+      const stage = document.getElementById('photoStage');
+      const introText = document.getElementById('photoIntroText');
+      const canvas = document.getElementById('photoParticleCanvas');
+      const ctx = canvas.getContext('2d');
+      const particles = [];
+
+      function clampText(value, fallback, maxLen) {
+        if (typeof value !== 'string') return fallback;
+        const text = value.trim();
+        return text ? text.slice(0, maxLen) : fallback;
+      }
+
+      function applySavedState() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+          const text = clampText(saved.introText, '今天, 你就是C位', 24);
+          const highlight = clampText(saved.introHighlight, 'C位', 16);
+          introText.textContent = text;
+          if (saved.backgroundDataUrl && typeof saved.backgroundDataUrl === 'string') {
+            stage.style.setProperty('--bg-image', `url("${saved.backgroundDataUrl}")`);
+            stage.classList.add('has-bg');
+          }
+          if (highlight && text.includes(highlight)) {
+            introText.textContent = '';
+            const start = text.indexOf(highlight);
+            if (start > 0) introText.appendChild(document.createTextNode(text.slice(0, start)));
+            const mark = document.createElement('span');
+            mark.className = 'intro-highlight';
+            mark.textContent = highlight;
+            introText.appendChild(mark);
+            const after = text.slice(start + highlight.length);
+            if (after) introText.appendChild(document.createTextNode(after));
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(window.innerWidth * dpr);
+        canvas.height = Math.floor(window.innerHeight * dpr);
+        canvas.style.width = `${window.innerWidth}px`;
+        canvas.style.height = `${window.innerHeight}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        particles.length = 0;
+        const count = Math.min(180, Math.floor((window.innerWidth * window.innerHeight) / 9000));
+        for (let i = 0; i < count; i += 1) {
+          particles.push({
+            x: Math.random() * window.innerWidth,
+            y: Math.random() * window.innerHeight,
+            r: 0.8 + Math.random() * 2.4,
+            vx: -0.18 + Math.random() * 0.36,
+            vy: -0.12 - Math.random() * 0.45,
+            alpha: 0.18 + Math.random() * 0.58,
+          });
+        }
+      }
+
+      function tick() {
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        particles.forEach((p) => {
+          p.x += p.vx;
+          p.y += p.vy;
+          if (p.y < -20 || p.x < -20 || p.x > window.innerWidth + 20) {
+            p.x = Math.random() * window.innerWidth;
+            p.y = window.innerHeight + 10;
+            p.r = 0.8 + Math.random() * 2.4;
+            p.vx = -0.18 + Math.random() * 0.36;
+            p.vy = -0.12 - Math.random() * 0.45;
+            p.alpha = 0.18 + Math.random() * 0.58;
+          }
+          ctx.beginPath();
+          ctx.fillStyle = `rgba(110, 235, 255, ${p.alpha})`;
+          ctx.shadowColor = 'rgba(110, 235, 255, 0.9)';
+          ctx.shadowBlur = 12;
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        requestAnimationFrame(tick);
+      }
+
+      applySavedState();
+      window.addEventListener('resize', resize);
+      resize();
+      tick();
+    }());
+  </script>
+</body>
+</html>

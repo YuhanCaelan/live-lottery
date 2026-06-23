@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>晚会大屏幕随机抽奖</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="stage" id="stage">
+    <canvas id="particleCanvas" class="canvas-layer" aria-hidden="true"></canvas>
+    <canvas id="fireworkCanvas" class="canvas-layer" aria-hidden="true"></canvas>
+
+    <div class="grid-overlay" aria-hidden="true"></div>
+    <div class="top-actions">
+      <button class="small-toggle" id="settingsToggle" type="button">设置</button>
+      <button class="small-toggle music-toggle" id="musicToggle" type="button" aria-label="音乐开关">音乐 ON</button>
+    </div>
+
+    <section class="hero" aria-live="polite">
+      <div class="round-badge" id="roundBadge">准备抽奖</div>
+
+      <div class="halo" id="halo">
+        <div class="halo-ring halo-ring-a"></div>
+        <div class="halo-ring halo-ring-b"></div>
+        <div class="halo-core">
+          <div class="intro-text" id="introText">今天, 你就是C位</div>
+          <div class="rolling-number" id="rollingNumber">15排, 20座</div>
+        </div>
+      </div>
+
+      <div class="winner-panel" id="winnerPanel">
+        <div class="winner-label" id="winnerLabel">第一轮中奖结果</div>
+        <div class="winner-number" id="winnerNumber">--</div>
+      </div>
+
+      <div class="result-list" id="resultList">
+        <div class="result-title">两轮中奖结果</div>
+        <div class="result-items" id="resultItems"></div>
+      </div>
+    </section>
+
+    <div class="flying-layer" id="flyingLayer" aria-hidden="true"></div>
+
+    <button class="show-results-btn" id="showResultsBtn" type="button">显示全部抽奖结果</button>
+
+    <section class="controls" aria-label="抽奖操作">
+      <button class="primary-btn" id="startBtn" type="button">开始抽奖</button>
+      <button class="primary-btn stop-btn" id="stopBtn" type="button" disabled>停止抽奖</button>
+      <button class="ghost-btn" id="resetBtn" type="button">重置抽奖</button>
+    </section>
+
+    <section class="settings-panel" id="settingsPanel" aria-label="抽奖设置" aria-hidden="true">
+      <div class="settings-shell">
+        <header class="settings-header">
+          <div>
+            <div class="settings-kicker">抽奖设置</div>
+            <h1 id="settingsPageTitle">不参与座位与抽奖轮次</h1>
+          </div>
+          <div class="settings-tabs" role="tablist" aria-label="设置页面切换">
+            <button class="settings-tab is-active" id="settingsPageTabBtn" type="button" role="tab" aria-selected="true">抽奖页</button>
+            <button class="settings-tab" id="photoPageTabBtn" type="button" role="tab" aria-selected="false">合影模式</button>
+          </div>
+          <button class="icon-close" id="settingsClose" type="button" aria-label="关闭设置">×</button>
+        </header>
+
+        <div class="settings-body">
+          <aside class="settings-sidebar">
+            <div class="setting-group">
+              <label for="roundsInput">抽奖轮数</label>
+              <input id="roundsInput" type="number" min="1" max="99" step="1" value="2">
+            </div>
+            <div class="setting-group">
+              <label for="perRoundInput">每轮人数</label>
+              <input id="perRoundInput" type="number" min="1" max="99" step="1" value="1">
+            </div>
+            <div class="setting-group">
+              <label for="introTextInput">抽奖页标语</label>
+              <input id="introTextInput" type="text" maxlength="24" value="今天, 你就是C位">
+            </div>
+            <div class="setting-group">
+              <label for="introHighlightInput">标语放大字</label>
+              <input id="introHighlightInput" type="text" maxlength="16" value="C位" placeholder="如 C位">
+            </div>
+            <label class="setting-check">
+              <input id="secondFloorInput" type="checkbox" checked>
+              <span>启用二层座位</span>
+            </label>
+
+            <div class="media-settings">
+              <div class="quick-title">舞台媒体</div>
+              <label class="file-pick-btn" id="backgroundPickBtn">
+                <input id="backgroundInput" type="file" accept="image/*">
+                <span id="backgroundPickText">选择背景图片</span>
+              </label>
+              <div class="media-name" id="backgroundName">默认背景</div>
+              <label class="file-pick-btn" id="bgmPickBtn">
+                <input id="bgmInput" type="file" accept="audio/*">
+                <span id="bgmPickText">选择 BGM</span>
+              </label>
+              <div class="media-name" id="bgmName">内置音乐</div>
+              <button class="range-apply-btn" id="clearMediaBtn" type="button">恢复默认媒体</button>
+            </div>
+
+            <div class="quick-exclude">
+              <div class="quick-title">快速排除</div>
+              <select id="rangeLevelInput" aria-label="快速排除区域">
+                <option value="一层">一层</option>
+                <option value="二层">二层</option>
+              </select>
+              <div class="range-inputs">
+                <label><span>起始排</span><input id="rangeStartRowInput" type="number" min="1" max="99" placeholder="如 16"></label>
+                <label><span>结束排</span><input id="rangeEndRowInput" type="number" min="1" max="99" placeholder="如 17"></label>
+                <label><span>起始列</span><input id="rangeStartColInput" type="number" min="1" max="42" placeholder="如 16"></label>
+                <label><span>结束列</span><input id="rangeEndColInput" type="number" min="1" max="42" placeholder="如 17"></label>
+              </div>
+              <button class="range-apply-btn" id="rangeExcludeBtn" type="button">排除范围</button>
+            </div>
+
+            <div class="seat-stats">
+              <div><span>总座位</span><strong id="totalSeatCount">0</strong></div>
+              <div><span>不参与</span><strong id="blockedSeatCount">0</strong></div>
+              <div><span>参与抽奖</span><strong id="activeSeatCount">0</strong></div>
+            </div>
+
+            <button class="reset-mode-btn" id="defaultModeBtn" type="button">恢复默认抽奖模式</button>
+          </aside>
+
+          <div class="seat-board-wrap">
+            <div class="screen-label">主 席 台</div>
+            <div class="seat-legend">
+              <span><i class="legend-seat is-active"></i>参与</span>
+              <span><i class="legend-seat is-blocked"></i>不参与</span>
+              <span><i class="legend-seat is-winner"></i>已中奖</span>
+            </div>
+            <div class="seat-map" id="seatMap" aria-label="座位图"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" role="status"></div>
+  </main>
+
+  <audio id="bgm" preload="auto" loop></audio>
+  <script src="script.js"></script>
+</body>
+</html>
